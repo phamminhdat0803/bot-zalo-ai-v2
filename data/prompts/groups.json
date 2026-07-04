@@ -1,0 +1,9 @@
+{
+  "2935803304472747987": {
+    "enabled": true,
+    "name": "Default Zalo Group",
+    "domain": "default",
+    "promptFile": "groups/2935803304472747987.md",
+    "priority": 50
+  }
+}

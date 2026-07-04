@@ -1,0 +1,32 @@
+# AutoReply
+
+URL: https://zca-js.tdung.com/vi/models/AutoReply.html
+
+# AutoReply
+
+### Model
+
+ts
+```ts
+export type AutoReplyItem = {
+    id: number;
+    weight: number;
+    enable: boolean;
+    modifiedTime: number;
+    startTime: number;
+    endTime: number;
+    content: string;
+    scope: AutoReplyScope;
+    uids: string[] | null;
+    ownerId: number;
+    recurrence: string[];
+    createdTime: number;
+};
+
+export enum AutoReplyScope {
+    Everyone = 0,
+    Stranger = 1,
+    SpecificFriends = 2,
+    FriendsExcept = 3
+};
+```

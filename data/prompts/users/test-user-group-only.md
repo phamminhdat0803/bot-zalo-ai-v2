@@ -1,0 +1,1 @@
+Group only user prompt test.

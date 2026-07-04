@@ -1,0 +1,10 @@
+{
+  "9055859889841854657": {
+    "enabled": true,
+    "name": "Ghi chú admin",
+    "promptFile": "users/9055859889841854657.md",
+    "applyInGroups": true,
+    "applyInPrivate": true,
+    "priority": 60
+  }
+}
