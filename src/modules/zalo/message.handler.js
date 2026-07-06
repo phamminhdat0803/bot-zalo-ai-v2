@@ -1,4 +1,5 @@
 const { parseZaloMessage } = require("./zalo.parser");
+const { filterOutCurrentMessage } = require("../actions/message-identity");
 const { planActions } = require("../ai/ai.service");
 const { executeActions } = require("../actions/action-executor");
 const { withTyping } = require("./typing.service");
@@ -45,6 +46,7 @@ async function handleZaloMessage(raw, botOwnId) {
     if (!previousMessages || previousMessages.length === 0) {
       previousMessages = getRecentMessages(msg.threadId, env.CONVERSATION_RECENT_LIMIT);
     }
+    previousMessages = filterOutCurrentMessage(previousMessages, msg);
 
     rememberMessage(msg);
 

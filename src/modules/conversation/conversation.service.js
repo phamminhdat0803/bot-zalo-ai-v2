@@ -2,6 +2,7 @@ const { appendMessage, getRecentMessages: repoGetRecent, configure: repoConfigur
 const { env } = require("../../config/env");
 const { logger } = require("../../config/logger");
 const { randomUUID } = require("crypto");
+const { hasValidZaloReactionIdentity } = require("../actions/message-identity");
 
 let enabled = true;
 let storeRaw = false;
@@ -24,14 +25,17 @@ function generateId(threadId) {
 }
 
 function toStoredMessage(normalizedMessage, direction = "inbound") {
-  const id = normalizedMessage.messageId || generateId(normalizedMessage.threadId);
-  return {
+  const zaloMessageId = normalizedMessage.messageId || null;
+  const cliMsgId = normalizedMessage.cliMsgId || null;
+  const id = zaloMessageId || generateId(normalizedMessage.threadId);
+  const row = {
     id,
     direction,
     platform: "zalo",
     threadId: normalizedMessage.threadId,
     threadType: normalizedMessage.threadType,
-    messageId: normalizedMessage.messageId || null,
+    messageId: zaloMessageId,
+    cliMsgId,
     senderId: normalizedMessage.senderId || null,
     senderName: normalizedMessage.senderName || null,
     text: normalizedMessage.text || null,
@@ -44,6 +48,8 @@ function toStoredMessage(normalizedMessage, direction = "inbound") {
     raw: storeRaw ? (normalizedMessage.raw || null) : null,
     createdAt: new Date().toISOString(),
   };
+  row.canReact = hasValidZaloReactionIdentity(row);
+  return row;
 }
 
 async function saveInboundMessage(normalizedMessage) {
@@ -67,6 +73,7 @@ async function saveOutboundMessage(outbound) {
     threadId: outbound.threadId,
     threadType: outbound.threadType,
     messageId: outbound.messageId || null,
+    cliMsgId: outbound.cliMsgId || null,
     senderId: outbound.senderId || "bot",
     senderName: outbound.senderName || "Zalo AI Bot",
     text: outbound.text || null,
@@ -79,6 +86,7 @@ async function saveOutboundMessage(outbound) {
     raw: storeRaw ? (outbound.raw || null) : null,
     createdAt: new Date().toISOString(),
   };
+  msg.canReact = hasValidZaloReactionIdentity(msg);
 
   const res = await appendMessage(msg);
   if (res.ok && process.env.ZALO_DEBUG_MESSAGE === "true") {

@@ -11,9 +11,10 @@ Quy tắc Phase 1:
 - Nếu user chào hỏi hoặc hỏi bình thường → send_message.
 - Nếu không cần trả lời → noop.
 - Có thể thêm react_message nếu phù hợp.
-- react_message mặc định thả cảm xúc vào tin nhắn hiện tại.
-- Nếu user nói "tin nhắn trên", "message trên", "tin trước", "ở trên" → react_message params phải có { "target": "previous" }.
-- Nếu user nói "tất cả", "mấy tin trên", "các tin trên", "toàn bộ" → chỉ tạo 1 react_message với params { "target": "all_previous" }.
+- Chỉ target "current" khi user muốn react chính tin lệnh hiện tại.
+- Nội dung tin sau ":" hoặc ngoặc kép → matchText, target "matched_text", không current.
+- "tin trên", "tin trước" → { "target": "previous" }.
+- "tất cả", "mấy tin trên" → { "target": "all_previous" }.
 - KHÔNG tạo nhiều react_message giống nhau để thả nhiều tim vào cùng 1 tin nhắn.
 - Nếu không có previousMessages thì không react_message target previous.
 

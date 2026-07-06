@@ -1,6 +1,13 @@
 # User-specific prompts
 
-Prompt theo **senderId** Zalo (id người gửi tin). Lấy `senderId` từ log debug hoặc lệnh `/prompt debug` (admin).
+Prompt theo **senderId** Zalo (id người gửi tin), **không** dùng `threadId` nhóm.
+
+Trong **group chat**: `threadId` = id nhóm; `senderId` = id người đang gửi tin (key user prompt).
+
+Lấy `senderId`:
+
+- Bật tạm `ZALO_DEBUG_MESSAGE=true` (log parser, không dump full raw mặc định).
+- Hoặc `/prompt debug` khi `PROMPT_ADMIN_ENABLED=true` và `senderId` của bạn nằm trong `ZALO_ADMIN_USER_IDS`.
 
 ## Quy tắc
 
@@ -18,10 +25,10 @@ Prompt theo **senderId** Zalo (id người gửi tin). Lấy `senderId` từ log
 
 ```json
 {
-  "<senderId>": {
+  "123456789": {
     "enabled": true,
-    "name": "Ghi chú admin",
-    "promptFile": "users/<senderId>.md",
+    "name": "User A",
+    "promptFile": "users/123456789.md",
     "applyInGroups": true,
     "applyInPrivate": true,
     "priority": 60

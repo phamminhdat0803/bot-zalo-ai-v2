@@ -232,11 +232,113 @@ async function run() {
     });
     console.log("USER7 PROMPT_USER_ENABLED=false:", !cOff.parts.some((p) => p.level === "user" && p.chars > 0));
     process.env.PROMPT_USER_ENABLED = "true";
+
+    const cGrpUserB = await bpcUser({
+      normalizedMessage: {
+        threadId: "group_1",
+        senderId: "user_b",
+        isGroup: true,
+        threadType: "group",
+        text: "hi",
+      },
+      previousMessages: [],
+    });
+    console.log(
+      "SPEC3 user_b skip:",
+      cGrpUserB.meta.userPromptDebug?.userPromptSkippedReason === "no_user_registry_entry"
+    );
+
+    fs.writeFileSync(
+      usersPath,
+      JSON.stringify(
+        {
+          user_a: {
+            enabled: true,
+            promptFile: "users/test-user-1.md",
+            applyInGroups: true,
+            applyInPrivate: true,
+          },
+        },
+        null,
+        2
+      )
+    );
+    clearPromptCache();
+    reloadModules();
+    const { buildPromptContext: bpcSpec } = require("../src/modules/ai/prompt-manager");
+
+    const cPrivA = await bpcSpec({
+      normalizedMessage: {
+        threadId: "user_a",
+        senderId: "user_a",
+        isGroup: false,
+        threadType: "user",
+        text: "hi",
+      },
+      previousMessages: [],
+    });
+    console.log(
+      "SPEC1 private user_a:",
+      cPrivA.meta.userPromptDebug?.userPromptApplied === true,
+      cPrivA.systemPrompt.includes("ngắn gọn")
+    );
+
+    const cGrpA = await bpcSpec({
+      normalizedMessage: {
+        threadId: "group_1",
+        senderId: "user_a",
+        isGroup: true,
+        threadType: "group",
+        text: "hi",
+      },
+      previousMessages: [],
+    });
+    console.log(
+      "SPEC2 group user_a:",
+      cGrpA.meta.userPromptDebug?.userPromptApplied === true,
+      cGrpA.meta.userPromptDebug?.senderId === "user_a"
+    );
+
+    process.env.PROMPT_MAX_SYSTEM_CHARS = "800";
+    reloadModules();
+    const { buildPromptContext: bpcBudget } = require("../src/modules/ai/prompt-manager");
+    const cBudget = await bpcBudget({
+      normalizedMessage: {
+        threadId: "user_a",
+        senderId: "user_a",
+        isGroup: false,
+        threadType: "user",
+        text: "hi",
+      },
+      previousMessages: [],
+    });
+    const ud = cBudget.meta.userPromptDebug || {};
+    console.log(
+      "SPEC6 budget:",
+      ud.userRegistryMatched === true,
+      ud.userPromptApplied === true || ud.userPromptSkippedReason === "prompt_budget_dropped"
+    );
+    process.env.PROMPT_MAX_SYSTEM_CHARS = "24000";
   } finally {
     fs.writeFileSync(usersPath, usersBackup);
     clearPromptCache();
     reloadModules();
   }
+
+  const { resolveSenderId, parseZaloMessage } = require("../src/modules/zalo/zalo.parser");
+  console.log(
+    "SENDER authorId:",
+    parseZaloMessage({ type: 1, threadId: "group_1", data: { authorId: "user_a", content: "hi" } }, null)
+      .senderId === "user_a"
+  );
+  console.log(
+    "SENDER group no sender:",
+    parseZaloMessage({ type: 1, threadId: "group_1", data: { content: "x" } }, null).senderId === undefined
+  );
+  console.log(
+    "SENDER private fallback:",
+    resolveSenderId({}, {}, { isGroup: false, threadId: "user_a" }) === "user_a"
+  );
 
   console.log("DONE");
 }
