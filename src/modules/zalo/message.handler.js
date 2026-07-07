@@ -17,6 +17,14 @@ const {
 async function handleZaloMessage(raw, botOwnId) {
   try {
     const msg = parseZaloMessage(raw, botOwnId);
+    logger.info('[MESSAGE_CONTEXT_DEBUG]', {
+      threadId: msg?.threadId,
+      groupId: msg?.groupId,
+      senderId: msg?.senderId,
+      isGroup: msg?.isGroup,
+      threadType: msg?.threadType,
+      text: msg?.text
+    });
 
     // save inbound early (respect whitelist + saveNonWhitelist)
     if (msg.isGroup && env.ZALO_ALLOWED_GROUP_IDS.length > 0 && !env.ZALO_ALLOWED_GROUP_IDS.includes(msg.threadId)) {

@@ -28,9 +28,33 @@ async function run() {
   // eslint-disable-next-line global-require
   require("../src/modules/tools/tool-registry").boot();
 
-  // Test 1: group without databaseSchemaFile must not crash and skip layer.
-  // We use the existing target group but strip databaseSchemaFile/businessFlowFile
-  // to verify the no_<x>_file skip path explicitly.
+  // ========== Cold-start suite ==========
+  delete require.cache[require.resolve("../src/modules/permissions/tool-permission")];
+  // eslint-disable-next-line global-require
+  const coldPerm = require("../src/modules/permissions/tool-permission");
+  coldPerm.clearPermissionCache();
+
+  const coldCtx = await buildPromptContext({
+    normalizedMessage: {
+      threadId: "6345678949379162493",
+      groupId: "6345678949379162493",
+      senderId: "TEST_USER",
+      isGroup: true,
+      threadType: "group",
+      text: "debug mysql tool",
+    },
+    previousMessages: [],
+  });
+  await assert(
+    (coldCtx.meta.layerDebug.toolInstruction.tools || []).includes("mysql_readonly_query"),
+    "[C-1] cold-start toolInstruction includes mysql_readonly_query"
+  );
+  await assert(
+    String(coldCtx.systemPrompt).includes("mysql_readonly_query"),
+    "[C-2] cold-start systemPrompt contains mysql_readonly_query"
+  );
+
+  // ========== Test 1: group without databaseSchemaFile must not crash and skip layer. ==========
   const groupsPath = path.resolve("data/prompts/groups.json");
   const original = await fs.readFile(groupsPath, "utf8");
   const backup = original;
@@ -68,7 +92,6 @@ async function run() {
       "[1b] group without businessFlowFile -> skipped (no_business_flow_file)"
     );
   } finally {
-    // restore db/bf for the next test set
     if (savedDb !== undefined) parsed[targetKey].databaseSchemaFile = savedDb;
     if (savedBf !== undefined) parsed[targetKey].businessFlowFile = savedBf;
     await fs.writeFile(groupsPath, JSON.stringify(parsed, null, 2));
@@ -76,14 +99,12 @@ async function run() {
     clearPromptCache();
   }
 
-  // Test 2: temporarily inject databaseSchemaFile via groups.json
-  // (re-read in case [1] mutated the file)
+  // ========== Test 2: temporarily inject databaseSchemaFile via groups.json ==========
   const groupsPath2 = path.resolve("data/prompts/groups.json");
   const original2 = await fs.readFile(groupsPath2, "utf8");
   const backup2 = original2;
   const parsed2 = JSON.parse(original2);
   const targetKey2 = "2935803304472747987";
-  // ensure key exists
   if (!parsed2[targetKey2]) parsed2[targetKey2] = { enabled: true };
   parsed2[targetKey2].databaseSchemaFile =
     "groups/2935803304472747987/database-schema.md";
@@ -91,7 +112,6 @@ async function run() {
     "groups/2935803304472747987/business-flow.md";
   parsed2[targetKey2].allowedTools = ["noop", "send_message", "react_message"];
 
-  // Invalidate caches
   // eslint-disable-next-line global-require
   const { clearPermissionCache: clrPerm } = require("../src/modules/permissions/tool-permission");
   clrPerm();
@@ -131,7 +151,7 @@ async function run() {
       "[2e] tool instruction does NOT include mysql_readonly_query when not allowed"
     );
 
-    // Test 3: prompt debug reply contains the new lines
+    // ========== Test 3: prompt debug reply contains the new lines ==========
     // eslint-disable-next-line global-require
     const { formatPromptDebugReply } = require("../src/modules/ai/prompt-manager");
     const reply = formatPromptDebugReply(ctx2);
@@ -144,8 +164,7 @@ async function run() {
     clrCache();
   }
 
-  // Test 4: group lists mysql_readonly_query but env MYSQL_TOOL_ENABLED=false
-  // -> registry gate must disable the tool even when permission says yes.
+  // ========== Test 4: env gate ==========
   // eslint-disable-next-line global-require
   const { isToolEnabled } = require("../src/modules/tools/tool-registry");
   await assert(
@@ -156,6 +175,37 @@ async function run() {
     isToolEnabled("send_message", { MYSQL_TOOL_ENABLED: "false" }) === true,
     "[4b] send_message not env-gated"
   );
+
+  // ========== Test 5: legacy fallback for unknown group ==========
+  const groupsBackupOnly = JSON.parse(original);
+  delete groupsBackupOnly["2935803304472747987"];
+  delete groupsBackupOnly["6345678949379162493"];
+  await fs.writeFile(groupsPath, JSON.stringify(groupsBackupOnly, null, 2));
+  clrPerm();
+  clrCache();
+  try {
+    const ctxUnknown = await buildPromptContext({
+      normalizedMessage: {
+        threadId: "unknown-group-xyz",
+        senderId: "u1",
+        isGroup: true,
+        threadType: "group",
+      },
+    });
+    const ti = ctxUnknown.meta.layerDebug.toolInstruction;
+    await assert(
+      ti.applied === true,
+      "[5a] unknown group still gets tool instruction (legacy 3 tools)"
+    );
+    await assert(
+      (ti.tools || []).length === 3 && !(ti.tools || []).includes("mysql_readonly_query"),
+      "[5b] unknown group tools = legacy only, no mysql"
+    );
+  } finally {
+    await fs.writeFile(groupsPath, original);
+    clrPerm();
+    clrCache();
+  }
 
   console.log("\nDone.");
 }

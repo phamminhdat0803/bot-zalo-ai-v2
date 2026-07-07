@@ -27,31 +27,71 @@ const { logger } = require("../../config/logger");
  * }} ctx
  */
 async function invokeTool(name, input, ctx = {}) {
+  logger.info("[ACTION_EXECUTOR_TOOL_INVOKE]", {
+    toolName: name,
+    threadId: ctx.threadId,
+    groupId: ctx.groupId,
+    senderId: ctx.senderId,
+  });
   const tool = getTool(name);
   if (!tool) {
-    return { ok: false, reason: "tool_not_registered", tool: name };
+    const out = { ok: false, reason: "tool_not_registered", tool: name };
+    logger.info("[TOOL_EXECUTOR_RESULT]", {
+      toolName: name,
+      ok: out.ok,
+      error: out.reason,
+    });
+    return out;
   }
   if (!isToolEnabled(name)) {
     logger.info("[ToolExecutor] denied (disabled)", name);
-    return { ok: false, reason: "tool_disabled", tool: name };
+    const out = { ok: false, reason: "tool_disabled", tool: name };
+    logger.info("[TOOL_EXECUTOR_RESULT]", {
+      toolName: name,
+      ok: out.ok,
+      error: out.reason,
+    });
+    return out;
   }
 
-  const perm = isToolAllowedForContext(name, ctx);
+  const perm = await isToolAllowedForContext(name, ctx);
   if (!perm.allowed) {
     logger.info("[ToolExecutor] denied (permission)", {
       tool: name,
       reason: perm.reason,
       threadId: ctx.threadId,
     });
-    return { ok: false, reason: perm.reason || "permission_denied", tool: name };
+    const out = { ok: false, reason: perm.reason || "permission_denied", tool: name };
+    logger.info("[TOOL_EXECUTOR_RESULT]", {
+      toolName: name,
+      ok: out.ok,
+      error: out.reason,
+    });
+    return out;
   }
 
   try {
     const result = await tool.execute(input || {}, ctx);
-    return { ok: true, tool: name, result };
+    const normalized = result && typeof result === "object"
+      ? { tool: name, ...result }
+      : { ok: true, tool: name, data: result };
+    logger.info("[TOOL_EXECUTOR_RESULT]", {
+      toolName: name,
+      ok: normalized.ok !== false,
+      error: normalized.error || normalized.reason || null,
+      rowCount: Array.isArray(normalized.rows) ? normalized.rows.length : undefined,
+      columns: Array.isArray(normalized.fields) ? normalized.fields : undefined,
+    });
+    return normalized;
   } catch (e) {
     logger.error("[ToolExecutor] error", name, e.message);
-    return { ok: false, reason: "tool_error", error: e.message, tool: name };
+    const out = { ok: false, reason: "tool_error", error: e.message, tool: name };
+    logger.info("[TOOL_EXECUTOR_RESULT]", {
+      toolName: name,
+      ok: out.ok,
+      error: out.reason,
+    });
+    return out;
   }
 }
 

@@ -9,6 +9,13 @@
  * Defaults:
  *   - If group missing allowedTools → only legacy actions allowed.
  *   - Risky tools (mysql_readonly_query) → must be explicitly listed.
+ *
+ * Cold-start behaviour:
+ *   - Registry cache (groupsCache / usersCache) is loaded lazily inside
+ *     isToolAllowedForContext() / listAllowedToolsForContext() so that
+ *     the FIRST request after process start resolves against real data,
+ *     not an empty fallback. Sync wrappers (`*Sync`) keep backward
+ *     compatibility for callers that cannot await.
  */
 
 const { env } = require("../../config/env");
@@ -46,6 +53,22 @@ async function getRegistries({ forceReload = false } = {}) {
   return { groups: g, users: u };
 }
 
+/**
+ * Resolve registry for a context. Honours caller-provided ctx.groupsRegistry /
+ * ctx.usersRegistry (used in tests / dynamic context). Otherwise loads from
+ * disk via getRegistries() — guaranteeing the FIRST request after boot sees
+ * real data, never an empty fallback.
+ */
+async function resolveRegistriesForContext(ctx = {}) {
+  if (ctx.groupsRegistry || ctx.usersRegistry) {
+    return {
+      groups: ctx.groupsRegistry || {},
+      users: ctx.usersRegistry || {},
+    };
+  }
+  return await getRegistries({ forceReload: false });
+}
+
 function isAdmin(senderId) {
   if (!env.PROMPT_ADMIN_ENABLED) return false;
   if (!senderId) return false;
@@ -76,24 +99,10 @@ function getUserAllowedTools(userEntry) {
   return new Set(userEntry.allowedTools);
 }
 
-/**
- * Resolve whether a tool is allowed in the given context.
- *
- * @param {string} toolName
- * @param {{ threadId?: string, senderId?: string, isGroup?: boolean }} ctx
- * @returns {{ allowed: boolean, reason?: string, source?: string }}
- */
-function isToolAllowedForContext(toolName, ctx = {}) {
+function _applyPermissionLogic(toolName, ctx, groups, users) {
   if (!toolName) {
     return { allowed: false, reason: "missing_tool_name" };
   }
-  if (isAdmin(ctx.senderId)) {
-    return { allowed: true, source: "admin" };
-  }
-
-  // Prefer per-call registry if provided (test isolation, dynamic context)
-  const groups = ctx.groupsRegistry || groupsCache || {};
-  const users = ctx.usersRegistry || usersCache || {};
 
   const userEntry = getUserEntry(users, ctx);
   const userAllowed = getUserAllowedTools(userEntry);
@@ -131,18 +140,93 @@ function isToolAllowedForContext(toolName, ctx = {}) {
 }
 
 /**
- * List tool names that are allowed for a context. Used by prompt builder.
- * @param {{ threadId?: string, senderId?: string, isGroup?: boolean }} ctx
- * @returns {string[]}
+ * Resolve whether a tool is allowed in the given context. Async; lazy-loads
+ * registry cache if caller did not provide one.
+ *
+ * @param {string} toolName
+ * @param {{ threadId?: string, senderId?: string, isGroup?: boolean,
+ *           groupsRegistry?: object, usersRegistry?: object }} ctx
+ * @returns {{ allowed: boolean, reason?: string, source?: string }}
  */
-function listAllowedToolsForContext(ctx = {}) {
+async function isToolAllowedForContext(toolName, ctx = {}) {
+  if (isAdmin(ctx.senderId)) {
+    return { allowed: true, source: "admin" };
+  }
+  let groups;
+  let users;
+  try {
+    const reg = await resolveRegistriesForContext(ctx);
+    groups = reg.groups;
+    users = reg.users;
+  } catch (e) {
+    logger.warn("[ToolPermission] registry load failed", e.message);
+    return { allowed: false, reason: "registry_load_failed", source: "error" };
+  }
+  return _applyPermissionLogic(toolName, ctx, groups, users);
+}
+
+/**
+ * Sync variant. Kept for backward compatibility. WARNING: when the in-process
+ * cache is empty (cold-start), this falls back to default legacy tools —
+ * exactly the bug we are fixing. Prefer the async variant in async contexts.
+ */
+function isToolAllowedForContextSync(toolName, ctx = {}) {
+  if (isAdmin(ctx.senderId)) {
+    return { allowed: true, source: "admin" };
+  }
+  const groups = ctx.groupsRegistry || groupsCache || {};
+  const users = ctx.usersRegistry || usersCache || {};
+  return _applyPermissionLogic(toolName, ctx, groups, users);
+}
+
+/**
+ * List tool names allowed for a context. Async; awaits per-tool permission.
+ * @param {{ threadId?: string, senderId?: string, isGroup?: boolean,
+ *           groupsRegistry?: object, usersRegistry?: object }} ctx
+ * @returns {Promise<string[]>}
+ */
+async function listAllowedToolsForContext(ctx = {}) {
   const all = [
     "noop",
     "send_message",
     "react_message",
     "mysql_readonly_query",
   ];
-  return all.filter((n) => isToolAllowedForContext(n, ctx).allowed);
+  if (isAdmin(ctx.senderId)) {
+    return [...all];
+  }
+  let groups;
+  let users;
+  try {
+    const reg = await resolveRegistriesForContext(ctx);
+    groups = reg.groups;
+    users = reg.users;
+  } catch (e) {
+    logger.warn("[ToolPermission] registry load failed", e.message);
+    return ["noop", "send_message", "react_message"];
+  }
+  const out = [];
+  for (const name of all) {
+    const r = _applyPermissionLogic(name, ctx, groups, users);
+    if (r.allowed) out.push(name);
+  }
+  return out;
+}
+
+/**
+ * Sync variant. Backward compatible; subject to cold-start fallback.
+ */
+function listAllowedToolsForContextSync(ctx = {}) {
+  const all = [
+    "noop",
+    "send_message",
+    "react_message",
+    "mysql_readonly_query",
+  ];
+  return all
+    .map((n) => [n, isToolAllowedForContextSync(n, ctx)])
+    .filter(([, r]) => r.allowed)
+    .map(([n]) => n);
 }
 
 function clearPermissionCache() {
@@ -153,8 +237,11 @@ function clearPermissionCache() {
 
 module.exports = {
   isToolAllowedForContext,
+  isToolAllowedForContextSync,
   listAllowedToolsForContext,
+  listAllowedToolsForContextSync,
   getRegistries,
+  resolveRegistriesForContext,
   clearPermissionCache,
   _isAdmin: isAdmin,
 };

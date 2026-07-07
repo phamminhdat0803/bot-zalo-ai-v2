@@ -5,6 +5,8 @@ const { logger } = require("../../config/logger");
 const { resolveReactionTargets, logReactionResolve } = require("./reaction-target-resolver");
 const { extractSendMessageIds } = require("../zalo/send-message-result");
 const { isSyntheticMessageId } = require("./message-identity");
+const { invokeTool } = require("../tools/tool-executor");
+const { formatMysqlResultMessage, normalizeResult } = require("./mysql-result-formatter");
 
 const REACT_NOT_FOUND_TEXT = "Mình chưa tìm thấy tin nhắn đó để thả cảm xúc.";
 
@@ -12,7 +14,7 @@ async function executeActions(actions, ctx) {
   const results = [];
   const reactedMessageIds = new Set();
   for (const action of actions) {
-    const check = isActionAllowed(action);
+    const check = isActionAllowed(action, ctx);
     if (!check.allowed) {
       results.push({ action, ok: false, reason: check.reason });
       continue;
@@ -105,6 +107,63 @@ async function executeActions(actions, ctx) {
           });
         }
         results.push({ action, ok: reactionResults.some((r) => r.ok), data: reactionResults });
+      } else if (action.type === "mysql_readonly_query") {
+        const toolCtx = buildToolContext(ctx);
+        logger.info("[ACTION_EXECUTOR_TOOL_INVOKE]", {
+          toolName: "mysql_readonly_query",
+          threadId: toolCtx.threadId,
+          groupId: toolCtx.groupId,
+          senderId: toolCtx.senderId,
+          sqlPreview: String(action.params?.sql || "").slice(0, 160),
+        });
+        logger.info("[ACTION_EXECUTOR_TOOL_CONTEXT]", {
+          toolName: "mysql_readonly_query",
+          threadId: toolCtx.threadId,
+          groupId: toolCtx.groupId,
+          senderId: toolCtx.senderId,
+          isGroup: toolCtx.isGroup,
+          hasGroupConfig: Boolean(toolCtx.groupConfig),
+          hasGroupsRegistry: Boolean(toolCtx.groupsRegistry),
+        });
+
+        const rawResult = await invokeTool("mysql_readonly_query", action.params, toolCtx);
+        const result = normalizeResult(rawResult);
+        const rows = Array.isArray(result?.rows) ? result.rows : [];
+        const fields = Array.isArray(result?.fields) ? result.fields : [];
+        logger.info("[TOOL_EXECUTOR_RESULT]", {
+          toolName: "mysql_readonly_query",
+          ok: rawResult?.ok,
+          error: rawResult?.error || rawResult?.reason || result?.error || result?.reason,
+          rowCount: rows.length,
+          columns: fields,
+        });
+        logger.info("[MYSQL_TOOL_RESULT]", {
+          threadId: toolCtx.threadId,
+          ok: result?.ok,
+          error: result?.error || result?.reason,
+          rowCount: rows.length,
+          columns: fields,
+        });
+
+        const text = formatMysqlResultMessage(rawResult, action);
+        const res = await sendMessage({
+          threadId: ctx.message.threadId,
+          threadType: ctx.message.threadType,
+          text,
+        });
+        if (res.ok) {
+          await persistOutbound(ctx.message.threadId, ctx.message.threadType, text, res.data, ctx);
+        }
+        results.push({
+          action,
+          ok: !!result?.ok && !!res.ok,
+          data: {
+            sent: res.ok,
+            rowCount: rows.length,
+            columns: fields,
+          },
+          reason: result?.error || result?.reason || res.error,
+        });
       }
     } catch (e) {
       logger.error("[Executor] action failed", action.type, e.message);
@@ -112,6 +171,28 @@ async function executeActions(actions, ctx) {
     }
   }
   return results;
+}
+
+function buildToolContext(ctx = {}) {
+  const normalizedMessage = ctx.normalizedMessage || ctx.message || {};
+  const threadId = ctx.threadId || normalizedMessage?.threadId;
+  const isGroup = Boolean(ctx.isGroup ?? normalizedMessage?.isGroup);
+  const groupId = ctx.groupId || normalizedMessage?.groupId || (isGroup ? threadId : undefined);
+  return {
+    ...ctx,
+    threadId,
+    groupId,
+    senderId: ctx.senderId || normalizedMessage?.senderId,
+    isGroup,
+    threadType: ctx.threadType || normalizedMessage?.threadType,
+    messageId: ctx.messageId || normalizedMessage?.messageId,
+    botOwnId: ctx.botOwnId,
+    message: ctx.message || normalizedMessage,
+    normalizedMessage,
+    groupConfig: ctx.groupConfig,
+    groupsRegistry: ctx.groupsRegistry,
+    usersRegistry: ctx.usersRegistry,
+  };
 }
 
 async function persistOutbound(threadId, threadType, text, sendData, ctx) {
@@ -127,4 +208,4 @@ async function persistOutbound(threadId, threadType, text, sendData, ctx) {
   });
 }
 
-module.exports = { executeActions, REACT_NOT_FOUND_TEXT };
+module.exports = { executeActions, REACT_NOT_FOUND_TEXT, buildToolContext };

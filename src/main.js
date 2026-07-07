@@ -29,6 +29,13 @@ function setupSignalHandlers() {
 async function bootstrap() {
   setupSignalHandlers();
   configureFromEnv();
+  logger.info('[BOOT_ID]', {
+    pid: process.pid,
+    cwd: process.cwd(),
+    main: require.main?.filename,
+    file: __filename,
+    startedAt: new Date().toISOString()
+  });
   logger.info("[Bootstrap] starting Zalo AI Bot V2 (Phase 2A)");
   logger.info("[Bootstrap] ZALO_LOGIN_MODE=", process.env.ZALO_LOGIN_MODE || "qr");
 

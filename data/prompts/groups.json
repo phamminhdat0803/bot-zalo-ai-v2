@@ -5,47 +5,20 @@
     "domain": "default",
     "promptFile": "groups/2935803304472747987.md",
     "priority": 22,
-    "allowedTools": [
-      "noop",
-      "send_message",
-      "react_message",
-      "mysql_readonly_query"
-    ],
+    "allowedTools": ["noop", "send_message", "react_message", "mysql_readonly_query"],
     "mysql": {
       "enabled": true,
-      "allowedDatabases": [
-        "crm"
-      ],
-      "allowedTables": [
-        "customers",
-        "orders"
-      ],
+      "allowedDatabases": ["crm"],
+      "allowedTables": ["customers", "orders"],
       "maxRows": 100,
       "columns": {
         "customers": {
-          "allow": [
-            "id",
-            "name",
-            "created_at"
-          ],
-          "mask": [
-            "phone",
-            "email"
-          ],
-          "deny": [
-            "password",
-            "token",
-            "secret"
-          ]
+          "allow": ["id", "name", "created_at"],
+          "mask": ["phone", "email"],
+          "deny": ["password", "token", "secret"]
         },
         "orders": {
-          "allow": [
-            "id",
-            "customer_id",
-            "total",
-            "status",
-            "created_at"
-          ],
+          "allow": ["id", "customer_id", "total", "status", "created_at"],
           "mask": [],
           "deny": []
         }
@@ -53,5 +26,33 @@
     },
     "databaseSchemaFile": "groups/2935803304472747987/database-schema.md",
     "businessFlowFile": "groups/2935803304472747987/business-flow.md"
+  },
+  "6345678949379162493": {
+    "enabled": true,
+    "name": "Default Zalo Group",
+    "domain": "default",
+    "promptFile": "groups/6345678949379162493.md",
+    "priority": 22,
+    "allowedTools": ["noop", "send_message", "react_message", "mysql_readonly_query"],
+    "mysql": {
+      "enabled": true,
+      "allowedDatabases": ["book_car_v3"],
+      "allowedTables": ["customers", "bookings"],
+      "maxRows": 100,
+      "columns": {
+        "customers": {
+          "allow": ["id", "name", "created_at"],
+          "mask": ["phone", "email"],
+          "deny": ["license_number", "address"]
+        },
+        "bookings": {
+          "allow": ["id", "customer_id", "base_amount", "status", "created_at"],
+          "mask": [],
+          "deny": []
+        }
+      }
+    },
+    "databaseSchemaFile": "groups/6345678949379162493/database-schema.md",
+    "businessFlowFile": "groups/6345678949379162493/business-flow.md"
   }
 }

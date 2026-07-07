@@ -10,6 +10,21 @@ try {
   if (env.TOOL_REGISTRY_ENABLED) {
     // eslint-disable-next-line global-require
     require("../tools/tool-registry").boot();
+
+    // Warm permission registry cache so the very first inbound request does
+    // not pay the cold-start cost (and does not fall back to default legacy).
+    // Fire-and-forget: lazy-load inside isToolAllowedForContext() is the
+    // safety net for any failure here.
+    // eslint-disable-next-line global-require
+    const permissionMod = require("../permissions/tool-permission");
+    permissionMod
+      .getRegistries({ forceReload: false })
+      .then(() =>
+        logger.info("[AI] permission registry warmed")
+      )
+      .catch((e) =>
+        logger.warn("[AI] permission registry warm failed", e.message)
+      );
   }
 } catch (e) {
   logger.warn("[AI] tool registry boot failed", e.message);
@@ -51,6 +66,13 @@ async function planActions(normalizedMessage) {
     normalizedMessage,
     previousMessages: normalizedMessage.previousMessages,
   });
+  logger.info('[AI_PROMPT_RUNTIME]', {
+    threadId: normalizedMessage?.threadId,
+    senderId: normalizedMessage?.senderId,
+    isGroup: normalizedMessage?.isGroup,
+    toolInstruction: promptContext?.meta?.layerDebug?.toolInstruction,
+    systemPromptIncludesMysql: String(promptContext?.systemPrompt || '').includes('mysql_readonly_query')
+  });
 
   const messages = buildOpenAIMessages(promptContext);
 
@@ -70,6 +92,11 @@ async function planActions(normalizedMessage) {
     const text = res.choices[0]?.message?.content?.trim() || "";
     const parsed = extractJsonObject(text);
     if (!parsed) throw new Error("no_json");
+    logger.info("[AI_ACTIONS_PARSED]", {
+      threadId: normalizedMessage?.threadId,
+      senderId: normalizedMessage?.senderId,
+      actions: Array.isArray(parsed.actions) ? parsed.actions.map((a) => a?.type) : [],
+    });
 
     return parsed;
   } catch (e) {

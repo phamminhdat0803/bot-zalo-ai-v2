@@ -69,6 +69,81 @@ async function writeAudit(entry) {
   }
 }
 
+function getPolicyCandidateKeys(ctx = {}) {
+  return [
+    ctx.groupId,
+    ctx.threadId,
+    ctx.normalizedMessage?.groupId,
+    ctx.normalizedMessage?.threadId,
+  ].filter(Boolean).map(String);
+}
+
+async function resolveMysqlPolicyForContext(ctx = {}) {
+  const candidateKeys = getPolicyCandidateKeys(ctx);
+  logger.info("[MYSQL_POLICY_RESOLVE]", {
+    threadId: ctx.threadId,
+    groupId: ctx.groupId,
+    senderId: ctx.senderId,
+    isGroup: ctx.isGroup,
+    candidateKeys,
+    hasGroupConfig: Boolean(ctx.groupConfig),
+    hasGroupsRegistry: Boolean(ctx.groupsRegistry),
+  });
+
+  if (ctx.groupConfig?.mysql) {
+    return {
+      source: "ctx.groupConfig",
+      groupKey: ctx.groupId || ctx.threadId || null,
+      groupConfig: ctx.groupConfig,
+      mysqlPolicy: ctx.groupConfig.mysql,
+    };
+  }
+
+  if (ctx.groupsRegistry) {
+    for (const key of candidateKeys) {
+      const group = ctx.groupsRegistry[key];
+      if (group?.mysql) {
+        return {
+          source: "ctx.groupsRegistry",
+          groupKey: key,
+          groupConfig: group,
+          mysqlPolicy: group.mysql,
+        };
+      }
+    }
+  }
+
+  try {
+    // eslint-disable-next-line global-require
+    const permission = require("../../permissions/tool-permission");
+    if (typeof permission.getRegistries === "function") {
+      const registries = await permission.getRegistries({ forceReload: false });
+      for (const key of candidateKeys) {
+        const group = registries?.groups?.[key];
+        if (group?.mysql) {
+          return {
+            source: "groups.json",
+            groupKey: key,
+            groupConfig: group,
+            mysqlPolicy: group.mysql,
+          };
+        }
+      }
+    }
+  } catch (e) {
+    logger.warn("[MYSQL_POLICY_RESOLVE_FAILED]", {
+      error: e.message,
+    });
+  }
+
+  return {
+    source: "missing",
+    groupKey: candidateKeys[0] || null,
+    groupConfig: null,
+    mysqlPolicy: null,
+  };
+}
+
 function register() {
   registerTool({
     name: "mysql_readonly_query",
@@ -122,7 +197,7 @@ function register() {
       const { sql, reason, maxRows: inputMax } = parsed.data;
 
       // ----- Gate 3: permission check -----
-      const perm = isToolAllowedForContext("mysql_readonly_query", ctx);
+      const perm = await isToolAllowedForContext("mysql_readonly_query", ctx);
       if (!perm.allowed) {
         await writeAudit({
           ...auditBase,
@@ -137,14 +212,23 @@ function register() {
       }
 
       // ----- Gate 4: resolve group mysql policy (raw, before parsing) -----
-      const fromCtx = ctx?.groupConfig?.mysql;
-      const threadId = ctx?.threadId ? String(ctx.threadId) : null;
-      const fromGroup = threadId
-        ? ctx?.groupsRegistry?.[threadId]?.mysql
-        : null;
-      const groupPolicyRaw = (fromCtx && typeof fromCtx === "object")
-        ? fromCtx
-        : (fromGroup && typeof fromGroup === "object" ? fromGroup : null);
+      const resolvedPolicy = await resolveMysqlPolicyForContext(ctx);
+      const groupPolicyRaw = resolvedPolicy.mysqlPolicy;
+      const policyCtx = {
+        ...ctx,
+        groupId: ctx.groupId || resolvedPolicy.groupKey || ctx.threadId,
+        groupConfig: ctx.groupConfig || resolvedPolicy.groupConfig,
+      };
+      logger.info("[MYSQL_POLICY_RESOLVED]", {
+        threadId: ctx.threadId,
+        groupId: ctx.groupId,
+        source: resolvedPolicy.source,
+        groupKey: resolvedPolicy.groupKey,
+        hasPolicy: Boolean(groupPolicyRaw),
+        enabled: groupPolicyRaw?.enabled,
+        allowedDatabases: groupPolicyRaw?.allowedDatabases,
+        allowedTables: groupPolicyRaw?.allowedTables,
+      });
 
       if (!groupPolicyRaw) {
         await writeAudit({
@@ -152,9 +236,30 @@ function register() {
           sql,
           ok: false,
           error: "mysql_policy_missing",
+          groupKey: resolvedPolicy.groupKey,
+          policySource: resolvedPolicy.source,
           latencyMs: Date.now() - start,
         });
-        return safeError("mysql_policy_missing");
+        return {
+          ok: false,
+          error: "mysql_policy_missing",
+          details: {
+            groupKey: resolvedPolicy.groupKey,
+            source: resolvedPolicy.source,
+          },
+        };
+      }
+      if (groupPolicyRaw.enabled === false) {
+        await writeAudit({
+          ...auditBase,
+          sql,
+          ok: false,
+          error: "mysql_policy_disabled",
+          groupKey: resolvedPolicy.groupKey,
+          policySource: resolvedPolicy.source,
+          latencyMs: Date.now() - start,
+        });
+        return safeError("mysql_policy_disabled");
       }
 
       // ----- Gate 5: compute final maxRows -----
@@ -203,7 +308,7 @@ function register() {
       }
 
       // ----- Gate 7: database/table access policy -----
-      const access = enforceAccessPolicy(sql, ctx);
+      const access = enforceAccessPolicy(sql, policyCtx);
       if (!access.ok) {
         await writeAudit({
           ...auditBase,
@@ -227,7 +332,7 @@ function register() {
       // cross the wire to a caller that does not have explicit policy.
       const referencedTables = access.tables || [];
       for (const t of referencedTables) {
-        const probe = enforceColumnPolicy(t.table, [], ctx);
+          const probe = enforceColumnPolicy(t.table, [], policyCtx);
         if (!probe.ok) {
           await writeAudit({
             ...auditBase,
@@ -319,7 +424,7 @@ function register() {
           for (const row of data.rows) {
             const merged = {};
             for (const t of tables) {
-              const cp = enforceColumnPolicy(t.table, [row], ctx);
+              const cp = enforceColumnPolicy(t.table, [row], policyCtx);
               if (cp.ok) {
                 const cleaned = cp.rows[0] || {};
                 Object.assign(merged, cleaned);
@@ -392,4 +497,5 @@ module.exports = {
   MysqlReadonlyInputSchema,
   HARD_MAX_ROWS,
   register,
+  resolveMysqlPolicyForContext,
 };

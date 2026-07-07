@@ -2,7 +2,8 @@
 /**
  * scripts/test-tool-permission.js
  *
- * Validates Phase 3 permission resolution.
+ * Validates Phase 3 permission resolution + cold-start fix.
+ * Async API only: isToolAllowedForContext / listAllowedToolsForContext.
  */
 
 const fs = require("fs/promises");
@@ -37,26 +38,43 @@ async function run() {
   const usersBackup = usersOriginal;
 
   try {
-    // Test 1: no group registered, mysql_readonly_query should be denied
+    // ========== Cold-start suite ==========
+    delete require.cache[require.resolve("../src/modules/permissions/tool-permission")];
+    const coldPerm = require("../src/modules/permissions/tool-permission");
+    coldPerm.clearPermissionCache();
+    const ctx = {
+      threadId: "6345678949379162493",
+      groupId: "6345678949379162493",
+      isGroup: true,
+      senderId: "TEST_USER",
+    };
+    const mysqlR = await coldPerm.isToolAllowedForContext("mysql_readonly_query", ctx);
+    await assert(mysqlR.allowed === true, "[C-1] cold-start mysql allowed");
+    await assert(mysqlR.source === "groups.json", "[C-2] cold-start source = groups.json");
+    const allowed = await coldPerm.listAllowedToolsForContext(ctx);
+    await assert(allowed.includes("mysql_readonly_query"), "[C-3] cold-start list includes mysql");
+    await assert(allowed.length === 4, "[C-4] cold-start list has 4 tools");
+
+    // ========== Test 1: no group registered, mysql_readonly_query should be denied ==========
     const groups = JSON.parse(groupsOriginal);
     const users = JSON.parse(usersOriginal);
     await fs.writeFile(groupsPath, JSON.stringify({}));
     await fs.writeFile(usersPath, JSON.stringify({}));
     permMod.clearPermissionCache();
 
-    let r = permMod.isToolAllowedForContext("mysql_readonly_query", {
+    let r = await permMod.isToolAllowedForContext("mysql_readonly_query", {
       isGroup: true,
       threadId: "missing-group",
     });
     await assert(r.allowed === false, "[1] mysql denied when no group registry");
 
-    r = permMod.isToolAllowedForContext("send_message", {
+    r = await permMod.isToolAllowedForContext("send_message", {
       isGroup: true,
       threadId: "missing-group",
     });
     await assert(r.allowed === true, "[2] send_message allowed by default legacy");
 
-    // Test 2: group WITH explicit allowedTools excludes mysql
+    // ========== Test 2: group WITH explicit allowedTools excludes mysql ==========
     groups["g-test-1"] = {
       enabled: true,
       promptFile: "groups/g-test-1.md",
@@ -65,19 +83,19 @@ async function run() {
     await fs.writeFile(groupsPath, JSON.stringify(groups));
     permMod.clearPermissionCache();
 
-    r = permMod.isToolAllowedForContext("mysql_readonly_query", {
+    r = await permMod.isToolAllowedForContext("mysql_readonly_query", {
       isGroup: true,
       threadId: "g-test-1",
     });
     await assert(r.allowed === false, "[3] mysql denied when group allowedTools lacks it");
 
-    r = permMod.isToolAllowedForContext("send_message", {
+    r = await permMod.isToolAllowedForContext("send_message", {
       isGroup: true,
       threadId: "g-test-1",
     });
     await assert(r.allowed === true, "[4] send_message allowed");
 
-    // Test 3: group WITH mysql_readonly_query allowed, env disabled
+    // ========== Test 3: group WITH mysql_readonly_query allowed ==========
     groups["g-test-2"] = {
       enabled: true,
       promptFile: "groups/g-test-2.md",
@@ -86,19 +104,14 @@ async function run() {
     await fs.writeFile(groupsPath, JSON.stringify(groups));
     permMod.clearPermissionCache();
 
-    // env-controlled tool: even if perm says allowed, env toggle is enforced
-    // separately by the registry. We assert permission-layer behavior here.
-    const reg = await permMod.getRegistries({ forceReload: true });
-    if (!reg.groups["g-test-2"]) {
-      console.error("DEBUG groups:", Object.keys(reg.groups));
-    }
-    r = permMod.isToolAllowedForContext("mysql_readonly_query", {
+    await permMod.getRegistries({ forceReload: true });
+    r = await permMod.isToolAllowedForContext("mysql_readonly_query", {
       isGroup: true,
       threadId: "g-test-2",
     });
     await assert(r.allowed === true, "[5] mysql allowed when group lists it");
 
-    // env check: simulate MYSQL_TOOL_ENABLED=false at the registry gate
+    // ========== Test 4: env-gate at registry ==========
     // eslint-disable-next-line global-require
     const { isToolEnabled } = require("../src/modules/tools/tool-registry");
     const fakeEnv = { MYSQL_TOOL_ENABLED: "false" };
@@ -106,6 +119,27 @@ async function run() {
       isToolEnabled("mysql_readonly_query", fakeEnv) === false,
       "[6] mysql tool disabled in registry when env MYSQL_TOOL_ENABLED=false"
     );
+
+    // ========== Test 5: listAllowedToolsForContext async returns legacy for unknown group ==========
+    await fs.writeFile(groupsPath, JSON.stringify({}));
+    permMod.clearPermissionCache();
+    const list = await permMod.listAllowedToolsForContext({
+      isGroup: true,
+      threadId: "unknown-group",
+      senderId: "nobody",
+    });
+    await assert(
+      list.length === 3 && list.includes("send_message") && !list.includes("mysql_readonly_query"),
+      "[7] listAllowedToolsForContext: unknown group -> 3 legacy, no mysql"
+    );
+
+    // ========== Test 6: Backward-compat sync variant still works on warmed cache ==========
+    permMod.clearPermissionCache();
+    await permMod.getRegistries({ forceReload: false });
+    const rSync = permMod.isToolAllowedForContextSync("send_message", {
+      isGroup: false,
+    });
+    await assert(rSync.allowed === true, "[8] Sync variant still works after warm");
   } finally {
     await fs.writeFile(groupsPath, groupsBackup);
     await fs.writeFile(usersPath, usersBackup);

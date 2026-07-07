@@ -387,13 +387,25 @@ async function composeSystemLayers(normalizedMessage, runtimePrompt, parts) {
   tryLoadToolModules();
   if (toolRegistryMod && toolPermissionMod) {
     try {
-      const allowed = toolPermissionMod.listAllowedToolsForContext({
+      const allowed = await toolPermissionMod.listAllowedToolsForContext({
         isGroup,
         threadId,
         senderId: normalizedMessage?.senderId,
       });
       const allList = toolRegistryMod.listTools ? toolRegistryMod.listTools() : [];
       const visible = allList.filter((t) => allowed.includes(t.name));
+      logger.info('[TOOL_INSTRUCTION_RUNTIME]', {
+        threadId,
+        senderId: normalizedMessage?.senderId,
+        isGroup,
+        allowed,
+        allTools: allList.map(t => ({
+          name: t.name,
+          isEnabled: toolRegistryMod.isToolEnabled?.(t.name),
+          envToggle: t.envToggle
+        })),
+        visibleTools: visible.map(t => t.name)
+      });
       if (visible.length > 0) {
         const lines = [
           "# Available Backend Tools",

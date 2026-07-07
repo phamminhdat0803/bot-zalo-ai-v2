@@ -292,13 +292,42 @@ async function run() {
 
   state.calls = [];
   rl._reset();
+  // [11a] groupId undefined resolves mysql policy by threadId from groupsRegistry
+  const ctxThreadOnlyPolicy = baseCtx({
+    groupConfig: undefined,
+    groupId: undefined,
+    threadId: "g-test",
+    groupsRegistry: {
+      "g-test": {
+        allowedTools: ["mysql_readonly_query"],
+        mysql: baseCtx().groupConfig.mysql,
+      },
+    },
+  });
+  r = await t.execute({ sql: "SELECT * FROM customers", reason: "x" }, ctxThreadOnlyPolicy);
+  assert(r.ok === true, "[11a] groupId undefined resolves policy by threadId");
+  assert(state.calls.some(c => c.kind === "withClient"), "[11a-b] resolved policy reaches mysql client");
+
+  state.calls = [];
+  rl._reset();
   // [11] no policy → mysql_policy_missing
   r = await t.execute(
     { sql: "SELECT * FROM customers", reason: "x" },
     { threadId: "x", senderId: "u", isGroup: true, groupsRegistry: { x: { allowedTools: ["mysql_readonly_query"] } } }
   );
   assert(r.ok === false && r.error === "mysql_policy_missing", "[11] no policy → mysql_policy_missing");
+  assert(r.details?.groupKey === "x", "[11c] missing policy returns groupKey detail");
   assert(!state.calls.some(c => c.kind === "withClient"), "[11b] no mysql client call");
+
+  state.calls = [];
+  rl._reset();
+  // [11d] policy disabled → mysql_policy_disabled
+  r = await t.execute(
+    { sql: "SELECT * FROM customers", reason: "x" },
+    baseCtx({ groupConfig: { mysql: { ...baseCtx().groupConfig.mysql, enabled: false } } })
+  );
+  assert(r.ok === false && r.error === "mysql_policy_disabled", "[11d] disabled policy → mysql_policy_disabled");
+  assert(!state.calls.some(c => c.kind === "withClient"), "[11e] disabled policy no mysql client call");
 
   state.calls = [];
   rl._reset();
