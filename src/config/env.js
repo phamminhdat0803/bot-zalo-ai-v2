@@ -40,6 +40,31 @@ const env = {
   PROMPT_MAX_RUNTIME_CHARS: parseInt(process.env.PROMPT_MAX_RUNTIME_CHARS || "2000", 10),
 
   PROMPT_USER_ENABLED: (process.env.PROMPT_USER_ENABLED ?? "true") !== "false",
+
+  // Tool system (Phase 2+)
+  TOOL_REGISTRY_ENABLED: (process.env.TOOL_REGISTRY_ENABLED ?? "true") !== "false",
+
+  // MySQL readonly tool (Phase 4) — OFF by default
+  MYSQL_TOOL_ENABLED: (process.env.MYSQL_TOOL_ENABLED ?? "false") === "true",
+  MYSQL_HOST: process.env.MYSQL_HOST || "localhost",
+  MYSQL_PORT: parseInt(process.env.MYSQL_PORT || "3306", 10),
+  MYSQL_USER: process.env.MYSQL_USER || "",
+  MYSQL_PASSWORD: process.env.MYSQL_PASSWORD || "",
+  MYSQL_DATABASE: process.env.MYSQL_DATABASE || "",
+  MYSQL_QUERY_TIMEOUT_MS: parseInt(process.env.MYSQL_QUERY_TIMEOUT_MS || "8000", 10),
+  MYSQL_MAX_ROWS: parseInt(process.env.MYSQL_MAX_ROWS || "100", 10),
+  MYSQL_AUDIT_LOG: (process.env.MYSQL_AUDIT_LOG ?? "true") === "true",
+  MYSQL_AUDIT_DIR: process.env.MYSQL_AUDIT_DIR || "./data/audit",
+
+  // MySQL tool rate limit (Phase: Production Readiness)
+  MYSQL_TOOL_RATE_LIMIT_PER_MINUTE: parseInt(
+    process.env.MYSQL_TOOL_RATE_LIMIT_PER_MINUTE || "10",
+    10
+  ),
+  MYSQL_TOOL_RATE_LIMIT_PER_HOUR: parseInt(
+    process.env.MYSQL_TOOL_RATE_LIMIT_PER_HOUR || "100",
+    10
+  ),
 };
 
 function validateEnv() {

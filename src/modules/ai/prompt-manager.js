@@ -2,7 +2,30 @@ const crypto = require("crypto");
 const { env } = require("../../config/env");
 const { logger } = require("../../config/logger");
 const { buildPhase1Prompt } = require("./prompt-builder");
-const { loadPromptFile, loadPromptRegistry, loadUserPromptRegistry } = require("./prompt-loader");
+const {
+  loadPromptFile,
+  loadPromptRegistry,
+  loadUserPromptRegistry,
+} = require("./prompt-loader");
+
+let toolRegistryMod = null;
+let toolPermissionMod = null;
+
+function tryLoadToolModules() {
+  if (toolRegistryMod && toolPermissionMod) return;
+  try {
+    // eslint-disable-next-line global-require
+    toolRegistryMod = require("../tools/tool-registry");
+  } catch (_e) {
+    toolRegistryMod = null;
+  }
+  try {
+    // eslint-disable-next-line global-require
+    toolPermissionMod = require("../permissions/tool-permission");
+  } catch (_e) {
+    toolPermissionMod = null;
+  }
+}
 
 const JSON_EXAMPLE_SUFFIX = `
 Trả JSON:
@@ -272,6 +295,29 @@ async function composeSystemLayers(normalizedMessage, runtimePrompt, parts) {
     });
   }
 
+  // Debug trackers for new optional layers (Phase 1+5)
+  const layerDebug = {
+    databaseSchema: {
+      applied: false,
+      skippedReason: null,
+      file: null,
+      chars: 0,
+      enabled: !!groupEntry?.databaseSchemaFile || !!(groupEntry && groupEntry.databaseSchemaFile === "" ? false : !!groupEntry?.databaseSchemaFile),
+    },
+    businessFlow: {
+      applied: false,
+      skippedReason: null,
+      file: null,
+      chars: 0,
+    },
+    toolInstruction: {
+      applied: false,
+      skippedReason: null,
+      tools: [],
+      chars: 0,
+    },
+  };
+
   const blocks = [];
   if (core) blocks.push({ key: "core", level: "core", content: core, priority: 100 });
   if (identity) blocks.push({ key: "identity", level: "identity", content: identity, priority: 50 });
@@ -295,6 +341,102 @@ async function composeSystemLayers(normalizedMessage, runtimePrompt, parts) {
     }
   } else if (!isGroup) {
     groupPromptDebug.groupPromptSkippedReason = "not_group_chat";
+  }
+
+  // Phase 1: optional layers per group (DB schema, business flow)
+  if (groupEntry) {
+    const dbFile = typeof groupEntry.databaseSchemaFile === "string"
+      ? groupEntry.databaseSchemaFile
+      : null;
+    if (dbFile) {
+      layerDebug.databaseSchema.file = dbFile;
+      const dbContent = await loadLayer(dbFile, "databaseSchema", parts, { silent: true });
+      if (dbContent) {
+        layerDebug.databaseSchema.applied = true;
+        layerDebug.databaseSchema.chars = dbContent.length;
+        blocks.push({ key: "databaseSchema", level: "databaseSchema", content: dbContent, priority: 20 });
+      } else {
+        layerDebug.databaseSchema.skippedReason = "prompt_file_missing";
+      }
+    } else {
+      layerDebug.databaseSchema.skippedReason = "no_database_schema_file";
+    }
+
+    const bfFile = typeof groupEntry.businessFlowFile === "string"
+      ? groupEntry.businessFlowFile
+      : null;
+    if (bfFile) {
+      layerDebug.businessFlow.file = bfFile;
+      const bfContent = await loadLayer(bfFile, "businessFlow", parts, { silent: true });
+      if (bfContent) {
+        layerDebug.businessFlow.applied = true;
+        layerDebug.businessFlow.chars = bfContent.length;
+        blocks.push({ key: "businessFlow", level: "businessFlow", content: bfContent, priority: 19 });
+      } else {
+        layerDebug.businessFlow.skippedReason = "prompt_file_missing";
+      }
+    } else {
+      layerDebug.businessFlow.skippedReason = "no_business_flow_file";
+    }
+  } else {
+    layerDebug.databaseSchema.skippedReason = "no_group_registry_entry";
+    layerDebug.businessFlow.skippedReason = "no_group_registry_entry";
+  }
+
+  // Phase 5: dynamic tool instruction based on registry + permission
+  tryLoadToolModules();
+  if (toolRegistryMod && toolPermissionMod) {
+    try {
+      const allowed = toolPermissionMod.listAllowedToolsForContext({
+        isGroup,
+        threadId,
+        senderId: normalizedMessage?.senderId,
+      });
+      const allList = toolRegistryMod.listTools ? toolRegistryMod.listTools() : [];
+      const visible = allList.filter((t) => allowed.includes(t.name));
+      if (visible.length > 0) {
+        const lines = [
+          "# Available Backend Tools",
+          "",
+          "The following backend tools are available in this context:",
+          "",
+        ];
+        for (const t of visible) {
+          lines.push(`- ${t.name}: ${t.description || "(no description)"}`);
+        }
+        lines.push("");
+        lines.push("Unavailable tools must not be mentioned or invented.");
+        const content = lines.join("\n");
+        layerDebug.toolInstruction.applied = true;
+        layerDebug.toolInstruction.tools = visible.map((t) => t.name);
+        layerDebug.toolInstruction.chars = content.length;
+        blocks.push({
+          key: "toolInstruction",
+          level: "toolInstruction",
+          content,
+          priority: 21,
+        });
+        parts.push({
+          level: "toolInstruction",
+          source: "tool-registry",
+          enabled: true,
+          chars: content.length,
+        });
+      } else {
+        layerDebug.toolInstruction.skippedReason = "no_allowed_tools";
+        parts.push({
+          level: "toolInstruction",
+          source: "tool-registry",
+          enabled: false,
+          chars: 0,
+        });
+      }
+    } catch (e) {
+      layerDebug.toolInstruction.skippedReason = "tool_module_error";
+      logger.warn("[PromptManager] tool instruction failed", e.message);
+    }
+  } else {
+    layerDebug.toolInstruction.skippedReason = "tool_module_unavailable";
   }
 
   if (!userPromptDebug.userPromptSkippedReason && userPromptDebug.userEntry) {
@@ -371,6 +513,7 @@ async function composeSystemLayers(normalizedMessage, runtimePrompt, parts) {
     groupPromptDebug,
     truncatedLayers,
     droppedLayers,
+    layerDebug,
   };
 }
 
@@ -430,6 +573,7 @@ async function buildPromptContext(options = {}) {
     userEntry,
     userPromptDebug,
     groupPromptDebug,
+    layerDebug,
   } = await composeSystemLayers(normalizedMessage, runtimePrompt, parts);
 
   const versionHash = hashPromptContext(parts, {
@@ -464,6 +608,7 @@ async function buildPromptContext(options = {}) {
     userPromptEnabled,
     userPromptDebug,
     groupPromptDebug,
+    layerDebug,
     systemPrompt,
   });
 
@@ -494,6 +639,7 @@ async function buildPromptContext(options = {}) {
       userEntry: userEntry || null,
       userPromptDebug: userPromptDebug || null,
       groupPromptDebug: groupPromptDebug || null,
+      layerDebug: layerDebug || null,
       systemPromptChars: systemPrompt.length,
       systemPromptHash: sysHash,
     },
@@ -524,6 +670,7 @@ function logPromptDebug(ctx) {
       file: ud.userPromptFile,
       chars: ud.userPromptChars,
     },
+    layers: ctx.layerDebug || null,
     parts: ctx.parts?.map((p) => ({
       level: p.level,
       source: p.source,
@@ -543,6 +690,7 @@ function formatPromptDebugReply(promptContext) {
   const msg = promptContext.userPayload?.message || {};
   const ud = meta.userPromptDebug || {};
   const gd = meta.groupPromptDebug || {};
+  const ld = meta.layerDebug || {};
   const groupStatus = gd.groupPromptApplied
     ? "applied"
     : `skipped (${gd.groupPromptSkippedReason || "n/a"})`;
@@ -551,6 +699,18 @@ function formatPromptDebugReply(promptContext) {
     : `skipped (${ud.userPromptSkippedReason || "n/a"})`;
   const userKey = ud.senderId ?? msg.senderId ?? "n/a";
   const userFile = ud.userPromptFile ? `users/${String(userKey)}.md`.replace(/users\/users\//, "users/") : ud.userPromptFile || (userKey !== "n/a" ? `users/${userKey}.md` : "n/a");
+
+  function layerLine(name, layer) {
+    if (!layer) return `- ${name}: n/a`;
+    const status = layer.applied
+      ? `applied (${layer.chars} chars)`
+      : `skipped (${layer.skippedReason || "n/a"})`;
+    const file = layer.file ? ` [${layer.file}]` : "";
+    const tools = layer.tools && layer.tools.length
+      ? ` tools=[${layer.tools.join(",")}]`
+      : "";
+    return `- ${name}: ${status}${file}${tools}`;
+  }
 
   const lines = [
     "Prompt debug:",
@@ -563,6 +723,9 @@ function formatPromptDebugReply(promptContext) {
     `- userPrompt: ${userStatus}`,
     `- userPromptKey: ${userKey}`,
     `- userPromptFile: ${ud.userPromptFile || userFile}`,
+    layerLine("databaseSchema", ld.databaseSchema),
+    layerLine("businessFlow", ld.businessFlow),
+    layerLine("toolInstruction", ld.toolInstruction),
     `- systemPromptChars: ${meta.systemPromptChars ?? promptContext.systemPrompt?.length ?? 0}`,
     `- systemPromptHash: ${meta.systemPromptHash ?? "n/a"}`,
     `- versionHash: ${promptContext.versionHash}`,

@@ -4,6 +4,54 @@
     "name": "Default Zalo Group",
     "domain": "default",
     "promptFile": "groups/2935803304472747987.md",
-    "priority": 50
+    "priority": 22,
+    "allowedTools": [
+      "noop",
+      "send_message",
+      "react_message",
+      "mysql_readonly_query"
+    ],
+    "mysql": {
+      "enabled": true,
+      "allowedDatabases": [
+        "crm"
+      ],
+      "allowedTables": [
+        "customers",
+        "orders"
+      ],
+      "maxRows": 100,
+      "columns": {
+        "customers": {
+          "allow": [
+            "id",
+            "name",
+            "created_at"
+          ],
+          "mask": [
+            "phone",
+            "email"
+          ],
+          "deny": [
+            "password",
+            "token",
+            "secret"
+          ]
+        },
+        "orders": {
+          "allow": [
+            "id",
+            "customer_id",
+            "total",
+            "status",
+            "created_at"
+          ],
+          "mask": [],
+          "deny": []
+        }
+      }
+    },
+    "databaseSchemaFile": "groups/2935803304472747987/database-schema.md",
+    "businessFlowFile": "groups/2935803304472747987/business-flow.md"
   }
 }

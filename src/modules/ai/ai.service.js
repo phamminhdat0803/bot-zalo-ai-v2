@@ -3,6 +3,18 @@ const { env } = require("../../config/env");
 const { logger } = require("../../config/logger");
 const { buildPromptContext } = require("./prompt-manager");
 
+// Boot tool registry once so permission/prompt layers can introspect it.
+// MySQL tool is OFF by default (env MYSQL_TOOL_ENABLED=false), so behaviour
+// is identical to pre-refactor when MySQL is not configured.
+try {
+  if (env.TOOL_REGISTRY_ENABLED) {
+    // eslint-disable-next-line global-require
+    require("../tools/tool-registry").boot();
+  }
+} catch (e) {
+  logger.warn("[AI] tool registry boot failed", e.message);
+}
+
 function extractJsonObject(text) {
   const trimmed = (text || "").trim();
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
