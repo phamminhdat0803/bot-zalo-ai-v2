@@ -76,7 +76,16 @@ async function loadJsonRegistry(relativeJsonPath, label) {
     const parsed = JSON.parse(raw);
     return typeof parsed === "object" && parsed !== null ? parsed : {};
   } catch (e) {
-    logger.warn(`[PromptLoader] ${label} invalid JSON`, e.message);
+    const details = {
+      filePath: path.join(PROMPTS_ROOT, relativeJsonPath),
+      error: e.message,
+      cwd: process.cwd(),
+      promptsRoot: PROMPTS_ROOT,
+    };
+    logger.error?.(`[PromptLoader] ${label} invalid JSON`, details);
+    if (["groups.json", "users.json"].includes(relativeJsonPath)) {
+      throw new Error(`[PromptLoader] ${label} invalid JSON: ${e.message}; file=${details.filePath}; cwd=${details.cwd}; promptsRoot=${details.promptsRoot}`);
+    }
     return {};
   }
 }

@@ -220,6 +220,7 @@ function register() {
         groupConfig: ctx.groupConfig || resolvedPolicy.groupConfig,
       };
       logger.info("[MYSQL_POLICY_RESOLVED]", {
+        cwd: process.cwd(),
         threadId: ctx.threadId,
         groupId: ctx.groupId,
         source: resolvedPolicy.source,
@@ -228,6 +229,8 @@ function register() {
         enabled: groupPolicyRaw?.enabled,
         allowedDatabases: groupPolicyRaw?.allowedDatabases,
         allowedTables: groupPolicyRaw?.allowedTables,
+        tableAliases: groupPolicyRaw?.tableAliases,
+        maxRows: groupPolicyRaw?.maxRows,
       });
 
       if (!groupPolicyRaw) {
@@ -292,7 +295,7 @@ function register() {
         logger.info("[MysqlTool] denied by sql-validator", validation.reason);
         return safeError(validation.reason);
       }
-      const finalSql = validation.sql;
+      let finalSql = validation.sql;
       const autoLimit = !!validation.autoLimit;
 
       // Detect LIMIT clamp.
@@ -308,7 +311,7 @@ function register() {
       }
 
       // ----- Gate 7: database/table access policy -----
-      const access = enforceAccessPolicy(sql, policyCtx);
+      const access = enforceAccessPolicy(finalSql, policyCtx);
       if (!access.ok) {
         await writeAudit({
           ...auditBase,
@@ -325,6 +328,17 @@ function register() {
         });
         return safeError(access.error);
       }
+
+      if (access.aliasChanges?.length || access.sqlRewritten) {
+        for (const change of access.aliasChanges || []) {
+          logger.info("[MYSQL_TABLE_ALIAS]", {
+            originalTable: change.originalTable,
+            canonicalTable: change.canonicalTable,
+            sqlRewritten: !!access.sqlRewritten,
+          });
+        }
+      }
+      finalSql = access.rewrittenSql || finalSql;
 
       // ----- Gate 7.5: column-policy existence pre-flight -----
       // Fail-closed: if any referenced table lacks a column policy, reject

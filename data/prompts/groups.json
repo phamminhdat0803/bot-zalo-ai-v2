@@ -5,21 +5,600 @@
     "domain": "default",
     "promptFile": "groups/2935803304472747987.md",
     "priority": 22,
-    "allowedTools": ["noop", "send_message", "react_message", "mysql_readonly_query"],
+    "allowedTools": [
+      "noop",
+      "send_message",
+      "react_message",
+      "mysql_readonly_query"
+    ],
     "mysql": {
       "enabled": true,
-      "allowedDatabases": ["crm"],
-      "allowedTables": ["customers", "orders"],
+      "allowedDatabases": [
+        "glpi"
+      ],
+      "allowedTables": [
+        "glpi_computers",
+        "glpi_monitors",
+        "glpi_printers",
+        "glpi_networkequipments",
+        "glpi_peripherals",
+        "glpi_softwarelicenses",
+        "glpi_softwares",
+        "glpi_softwareversions",
+        "glpi_users",
+        "glpi_useremails",
+        "glpi_groups",
+        "glpi_locations",
+        "glpi_manufacturers",
+        "glpi_computermodels",
+        "glpi_monitormodels",
+        "glpi_printermodels",
+        "glpi_tickets",
+        "glpi_tickets_users",
+        "glpi_items_tickets",
+        "glpi_documents",
+        "glpi_documents_items",
+        "glpi_logs"
+      ],
+      "tableAliases": {
+        "users": "glpi_users",
+        "user": "glpi_users",
+        "emails": "glpi_useremails",
+        "useremails": "glpi_useremails",
+        "computers": "glpi_computers",
+        "computer": "glpi_computers",
+        "monitors": "glpi_monitors",
+        "monitor": "glpi_monitors",
+        "printers": "glpi_printers",
+        "printer": "glpi_printers",
+        "networkequipments": "glpi_networkequipments",
+        "network_equipment": "glpi_networkequipments",
+        "network": "glpi_networkequipments",
+        "peripherals": "glpi_peripherals",
+        "peripheral": "glpi_peripherals",
+        "softwares": "glpi_softwares",
+        "software": "glpi_softwares",
+        "softwarelicenses": "glpi_softwarelicenses",
+        "licenses": "glpi_softwarelicenses",
+        "license": "glpi_softwarelicenses",
+        "softwareversions": "glpi_softwareversions",
+        "versions": "glpi_softwareversions",
+        "groups": "glpi_groups",
+        "group": "glpi_groups",
+        "locations": "glpi_locations",
+        "location": "glpi_locations",
+        "manufacturers": "glpi_manufacturers",
+        "manufacturer": "glpi_manufacturers",
+        "tickets": "glpi_tickets",
+        "ticket": "glpi_tickets",
+        "documents": "glpi_documents",
+        "document": "glpi_documents",
+        "logs": "glpi_logs",
+        "log": "glpi_logs"
+      },
       "maxRows": 100,
       "columns": {
-        "customers": {
-          "allow": ["id", "name", "created_at"],
-          "mask": ["phone", "email"],
-          "deny": ["password", "token", "secret"]
+        "glpi_computers": {
+          "allow": [
+            "id",
+            "name",
+            "entities_id",
+            "locations_id",
+            "computermodels_id",
+            "computertypes_id",
+            "manufacturers_id",
+            "users_id",
+            "groups_id",
+            "states_id",
+            "is_deleted",
+            "is_dynamic",
+            "date_creation",
+            "date_mod",
+            "last_inventory_update",
+            "last_boot"
+          ],
+          "mask": [
+            "serial",
+            "otherserial",
+            "contact",
+            "contact_num",
+            "uuid"
+          ],
+          "deny": [
+            "comment"
+          ]
         },
-        "orders": {
-          "allow": ["id", "customer_id", "total", "status", "created_at"],
+        "glpi_monitors": {
+          "allow": [
+            "id",
+            "name",
+            "entities_id",
+            "locations_id",
+            "monitortypes_id",
+            "monitormodels_id",
+            "manufacturers_id",
+            "users_id",
+            "groups_id",
+            "states_id",
+            "size",
+            "is_deleted",
+            "is_dynamic",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [
+            "serial",
+            "otherserial",
+            "contact",
+            "contact_num",
+            "uuid"
+          ],
+          "deny": [
+            "comment"
+          ]
+        },
+        "glpi_printers": {
+          "allow": [
+            "id",
+            "name",
+            "entities_id",
+            "locations_id",
+            "networks_id",
+            "printertypes_id",
+            "printermodels_id",
+            "manufacturers_id",
+            "users_id",
+            "groups_id",
+            "states_id",
+            "memory_size",
+            "last_pages_counter",
+            "is_deleted",
+            "is_dynamic",
+            "date_creation",
+            "date_mod",
+            "last_inventory_update"
+          ],
+          "mask": [
+            "serial",
+            "otherserial",
+            "contact",
+            "contact_num",
+            "uuid"
+          ],
+          "deny": [
+            "comment",
+            "sysdescr"
+          ]
+        },
+        "glpi_networkequipments": {
+          "allow": [
+            "id",
+            "name",
+            "entities_id",
+            "locations_id",
+            "networks_id",
+            "networkequipmenttypes_id",
+            "networkequipmentmodels_id",
+            "manufacturers_id",
+            "users_id",
+            "groups_id",
+            "states_id",
+            "ram",
+            "cpu",
+            "uptime",
+            "is_deleted",
+            "is_dynamic",
+            "date_creation",
+            "date_mod",
+            "last_inventory_update"
+          ],
+          "mask": [
+            "serial",
+            "otherserial",
+            "contact",
+            "contact_num",
+            "uuid"
+          ],
+          "deny": [
+            "comment",
+            "sysdescr"
+          ]
+        },
+        "glpi_peripherals": {
+          "allow": [
+            "id",
+            "name",
+            "entities_id",
+            "locations_id",
+            "peripheraltypes_id",
+            "peripheralmodels_id",
+            "brand",
+            "manufacturers_id",
+            "users_id",
+            "groups_id",
+            "states_id",
+            "is_deleted",
+            "is_dynamic",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [
+            "serial",
+            "otherserial",
+            "contact",
+            "contact_num",
+            "uuid"
+          ],
+          "deny": [
+            "comment"
+          ]
+        },
+        "glpi_softwarelicenses": {
+          "allow": [
+            "id",
+            "name",
+            "softwares_id",
+            "softwareversions_id_buy",
+            "softwareversions_id_use",
+            "entities_id",
+            "locations_id",
+            "users_id",
+            "groups_id",
+            "states_id",
+            "manufacturers_id",
+            "number",
+            "expire",
+            "is_valid",
+            "is_deleted",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [
+            "serial",
+            "otherserial",
+            "contact",
+            "contact_num"
+          ],
+          "deny": [
+            "comment",
+            "pictures"
+          ]
+        },
+        "glpi_softwares": {
+          "allow": [
+            "id",
+            "name",
+            "entities_id",
+            "locations_id",
+            "users_id",
+            "groups_id",
+            "manufacturers_id",
+            "softwarecategories_id",
+            "is_update",
+            "is_valid",
+            "is_deleted",
+            "date_creation",
+            "date_mod"
+          ],
           "mask": [],
+          "deny": [
+            "comment",
+            "pictures"
+          ]
+        },
+        "glpi_softwareversions": {
+          "allow": [
+            "id",
+            "name",
+            "softwares_id",
+            "entities_id",
+            "states_id",
+            "arch",
+            "operatingsystems_id",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [],
+          "deny": [
+            "comment"
+          ]
+        },
+        "glpi_users": {
+          "allow": [
+            "id",
+            "name",
+            "realname",
+            "firstname",
+            "locations_id",
+            "is_active",
+            "is_deleted",
+            "profiles_id",
+            "entities_id",
+            "groups_id",
+            "users_id_supervisor",
+            "last_login",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [
+            "phone",
+            "phone2",
+            "mobile",
+            "registration_number",
+            "picture",
+            "nickname"
+          ],
+          "deny": [
+            "password",
+            "password_forget_token",
+            "personal_token",
+            "api_token",
+            "cookie_token",
+            "user_dn",
+            "user_dn_hash",
+            "display_options",
+            "privatebookmarkorder",
+            "plannings"
+          ]
+        },
+        "glpi_useremails": {
+          "allow": [
+            "id",
+            "users_id",
+            "is_default",
+            "is_dynamic"
+          ],
+          "mask": [
+            "email"
+          ],
+          "deny": []
+        },
+        "glpi_groups": {
+          "allow": [
+            "id",
+            "name",
+            "entities_id",
+            "groups_id",
+            "completename",
+            "level",
+            "is_requester",
+            "is_watcher",
+            "is_assign",
+            "is_task",
+            "is_notify",
+            "is_itemgroup",
+            "is_usergroup",
+            "is_manager",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [],
+          "deny": [
+            "comment",
+            "ldap_field",
+            "ldap_value",
+            "ldap_group_dn",
+            "ancestors_cache",
+            "sons_cache"
+          ]
+        },
+        "glpi_locations": {
+          "allow": [
+            "id",
+            "name",
+            "entities_id",
+            "locations_id",
+            "completename",
+            "level",
+            "town",
+            "state",
+            "country",
+            "building",
+            "room",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [
+            "address",
+            "postcode",
+            "latitude",
+            "longitude",
+            "altitude"
+          ],
+          "deny": [
+            "comment",
+            "ancestors_cache",
+            "sons_cache"
+          ]
+        },
+        "glpi_manufacturers": {
+          "allow": [
+            "id",
+            "name",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [],
+          "deny": [
+            "comment"
+          ]
+        },
+        "glpi_computermodels": {
+          "allow": [
+            "id",
+            "name",
+            "product_number",
+            "weight",
+            "required_units",
+            "depth",
+            "power_connections",
+            "power_consumption",
+            "is_half_rack",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [],
+          "deny": [
+            "comment",
+            "picture_front",
+            "picture_rear",
+            "pictures"
+          ]
+        },
+        "glpi_monitormodels": {
+          "allow": [
+            "id",
+            "name",
+            "product_number",
+            "weight",
+            "required_units",
+            "depth",
+            "power_connections",
+            "power_consumption",
+            "is_half_rack",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [],
+          "deny": [
+            "comment",
+            "picture_front",
+            "picture_rear",
+            "pictures"
+          ]
+        },
+        "glpi_printermodels": {
+          "allow": [
+            "id",
+            "name",
+            "product_number",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [],
+          "deny": [
+            "comment",
+            "picture_front",
+            "picture_rear",
+            "pictures"
+          ]
+        },
+        "glpi_tickets": {
+          "allow": [
+            "id",
+            "name",
+            "entities_id",
+            "date",
+            "closedate",
+            "solvedate",
+            "takeintoaccountdate",
+            "date_mod",
+            "users_id_lastupdater",
+            "users_id_recipient",
+            "status",
+            "requesttypes_id",
+            "urgency",
+            "impact",
+            "priority",
+            "itilcategories_id",
+            "type",
+            "global_validation",
+            "time_to_resolve",
+            "time_to_own",
+            "waiting_duration",
+            "close_delay_stat",
+            "solve_delay_stat",
+            "takeintoaccount_delay_stat",
+            "actiontime",
+            "is_deleted",
+            "locations_id",
+            "validation_percent",
+            "date_creation"
+          ],
+          "mask": [],
+          "deny": [
+            "content"
+          ]
+        },
+        "glpi_tickets_users": {
+          "allow": [
+            "id",
+            "tickets_id",
+            "users_id",
+            "type",
+            "use_notification"
+          ],
+          "mask": [
+            "alternative_email"
+          ],
+          "deny": []
+        },
+        "glpi_items_tickets": {
+          "allow": [
+            "id",
+            "itemtype",
+            "items_id",
+            "tickets_id"
+          ],
+          "mask": [],
+          "deny": []
+        },
+        "glpi_documents": {
+          "allow": [
+            "id",
+            "entities_id",
+            "name",
+            "filename",
+            "documentcategories_id",
+            "mime",
+            "date_mod",
+            "is_deleted",
+            "users_id",
+            "tickets_id",
+            "is_blacklisted",
+            "tag",
+            "date_creation"
+          ],
+          "mask": [
+            "filepath",
+            "link",
+            "sha1sum"
+          ],
+          "deny": [
+            "comment"
+          ]
+        },
+        "glpi_documents_items": {
+          "allow": [
+            "id",
+            "documents_id",
+            "items_id",
+            "itemtype",
+            "entities_id",
+            "date_mod",
+            "users_id",
+            "timeline_position",
+            "date_creation",
+            "date"
+          ],
+          "mask": [],
+          "deny": []
+        },
+        "glpi_logs": {
+          "allow": [
+            "id",
+            "itemtype",
+            "items_id",
+            "itemtype_link",
+            "linked_action",
+            "date_mod",
+            "id_search_option"
+          ],
+          "mask": [
+            "user_name",
+            "old_value",
+            "new_value"
+          ],
           "deny": []
         }
       }
@@ -33,21 +612,600 @@
     "domain": "default",
     "promptFile": "groups/6345678949379162493.md",
     "priority": 22,
-    "allowedTools": ["noop", "send_message", "react_message", "mysql_readonly_query"],
+    "allowedTools": [
+      "noop",
+      "send_message",
+      "react_message",
+      "mysql_readonly_query"
+    ],
     "mysql": {
       "enabled": true,
-      "allowedDatabases": ["book_car_v3"],
-      "allowedTables": ["customers", "bookings"],
+      "allowedDatabases": [
+        "glpi"
+      ],
+      "allowedTables": [
+        "glpi_computers",
+        "glpi_monitors",
+        "glpi_printers",
+        "glpi_networkequipments",
+        "glpi_peripherals",
+        "glpi_softwarelicenses",
+        "glpi_softwares",
+        "glpi_softwareversions",
+        "glpi_users",
+        "glpi_useremails",
+        "glpi_groups",
+        "glpi_locations",
+        "glpi_manufacturers",
+        "glpi_computermodels",
+        "glpi_monitormodels",
+        "glpi_printermodels",
+        "glpi_tickets",
+        "glpi_tickets_users",
+        "glpi_items_tickets",
+        "glpi_documents",
+        "glpi_documents_items",
+        "glpi_logs"
+      ],
+      "tableAliases": {
+        "users": "glpi_users",
+        "user": "glpi_users",
+        "emails": "glpi_useremails",
+        "useremails": "glpi_useremails",
+        "computers": "glpi_computers",
+        "computer": "glpi_computers",
+        "monitors": "glpi_monitors",
+        "monitor": "glpi_monitors",
+        "printers": "glpi_printers",
+        "printer": "glpi_printers",
+        "networkequipments": "glpi_networkequipments",
+        "network_equipment": "glpi_networkequipments",
+        "network": "glpi_networkequipments",
+        "peripherals": "glpi_peripherals",
+        "peripheral": "glpi_peripherals",
+        "softwares": "glpi_softwares",
+        "software": "glpi_softwares",
+        "softwarelicenses": "glpi_softwarelicenses",
+        "licenses": "glpi_softwarelicenses",
+        "license": "glpi_softwarelicenses",
+        "softwareversions": "glpi_softwareversions",
+        "versions": "glpi_softwareversions",
+        "groups": "glpi_groups",
+        "group": "glpi_groups",
+        "locations": "glpi_locations",
+        "location": "glpi_locations",
+        "manufacturers": "glpi_manufacturers",
+        "manufacturer": "glpi_manufacturers",
+        "tickets": "glpi_tickets",
+        "ticket": "glpi_tickets",
+        "documents": "glpi_documents",
+        "document": "glpi_documents",
+        "logs": "glpi_logs",
+        "log": "glpi_logs"
+      },
       "maxRows": 100,
       "columns": {
-        "customers": {
-          "allow": ["id", "name", "created_at"],
-          "mask": ["phone", "email"],
-          "deny": ["license_number", "address"]
+        "glpi_computers": {
+          "allow": [
+            "id",
+            "name",
+            "entities_id",
+            "locations_id",
+            "computermodels_id",
+            "computertypes_id",
+            "manufacturers_id",
+            "users_id",
+            "groups_id",
+            "states_id",
+            "is_deleted",
+            "is_dynamic",
+            "date_creation",
+            "date_mod",
+            "last_inventory_update",
+            "last_boot"
+          ],
+          "mask": [
+            "serial",
+            "otherserial",
+            "contact",
+            "contact_num",
+            "uuid"
+          ],
+          "deny": [
+            "comment"
+          ]
         },
-        "bookings": {
-          "allow": ["id", "customer_id", "base_amount", "status", "created_at"],
+        "glpi_monitors": {
+          "allow": [
+            "id",
+            "name",
+            "entities_id",
+            "locations_id",
+            "monitortypes_id",
+            "monitormodels_id",
+            "manufacturers_id",
+            "users_id",
+            "groups_id",
+            "states_id",
+            "size",
+            "is_deleted",
+            "is_dynamic",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [
+            "serial",
+            "otherserial",
+            "contact",
+            "contact_num",
+            "uuid"
+          ],
+          "deny": [
+            "comment"
+          ]
+        },
+        "glpi_printers": {
+          "allow": [
+            "id",
+            "name",
+            "entities_id",
+            "locations_id",
+            "networks_id",
+            "printertypes_id",
+            "printermodels_id",
+            "manufacturers_id",
+            "users_id",
+            "groups_id",
+            "states_id",
+            "memory_size",
+            "last_pages_counter",
+            "is_deleted",
+            "is_dynamic",
+            "date_creation",
+            "date_mod",
+            "last_inventory_update"
+          ],
+          "mask": [
+            "serial",
+            "otherserial",
+            "contact",
+            "contact_num",
+            "uuid"
+          ],
+          "deny": [
+            "comment",
+            "sysdescr"
+          ]
+        },
+        "glpi_networkequipments": {
+          "allow": [
+            "id",
+            "name",
+            "entities_id",
+            "locations_id",
+            "networks_id",
+            "networkequipmenttypes_id",
+            "networkequipmentmodels_id",
+            "manufacturers_id",
+            "users_id",
+            "groups_id",
+            "states_id",
+            "ram",
+            "cpu",
+            "uptime",
+            "is_deleted",
+            "is_dynamic",
+            "date_creation",
+            "date_mod",
+            "last_inventory_update"
+          ],
+          "mask": [
+            "serial",
+            "otherserial",
+            "contact",
+            "contact_num",
+            "uuid"
+          ],
+          "deny": [
+            "comment",
+            "sysdescr"
+          ]
+        },
+        "glpi_peripherals": {
+          "allow": [
+            "id",
+            "name",
+            "entities_id",
+            "locations_id",
+            "peripheraltypes_id",
+            "peripheralmodels_id",
+            "brand",
+            "manufacturers_id",
+            "users_id",
+            "groups_id",
+            "states_id",
+            "is_deleted",
+            "is_dynamic",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [
+            "serial",
+            "otherserial",
+            "contact",
+            "contact_num",
+            "uuid"
+          ],
+          "deny": [
+            "comment"
+          ]
+        },
+        "glpi_softwarelicenses": {
+          "allow": [
+            "id",
+            "name",
+            "softwares_id",
+            "softwareversions_id_buy",
+            "softwareversions_id_use",
+            "entities_id",
+            "locations_id",
+            "users_id",
+            "groups_id",
+            "states_id",
+            "manufacturers_id",
+            "number",
+            "expire",
+            "is_valid",
+            "is_deleted",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [
+            "serial",
+            "otherserial",
+            "contact",
+            "contact_num"
+          ],
+          "deny": [
+            "comment",
+            "pictures"
+          ]
+        },
+        "glpi_softwares": {
+          "allow": [
+            "id",
+            "name",
+            "entities_id",
+            "locations_id",
+            "users_id",
+            "groups_id",
+            "manufacturers_id",
+            "softwarecategories_id",
+            "is_update",
+            "is_valid",
+            "is_deleted",
+            "date_creation",
+            "date_mod"
+          ],
           "mask": [],
+          "deny": [
+            "comment",
+            "pictures"
+          ]
+        },
+        "glpi_softwareversions": {
+          "allow": [
+            "id",
+            "name",
+            "softwares_id",
+            "entities_id",
+            "states_id",
+            "arch",
+            "operatingsystems_id",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [],
+          "deny": [
+            "comment"
+          ]
+        },
+        "glpi_users": {
+          "allow": [
+            "id",
+            "name",
+            "realname",
+            "firstname",
+            "locations_id",
+            "is_active",
+            "is_deleted",
+            "profiles_id",
+            "entities_id",
+            "groups_id",
+            "users_id_supervisor",
+            "last_login",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [
+            "phone",
+            "phone2",
+            "mobile",
+            "registration_number",
+            "picture",
+            "nickname"
+          ],
+          "deny": [
+            "password",
+            "password_forget_token",
+            "personal_token",
+            "api_token",
+            "cookie_token",
+            "user_dn",
+            "user_dn_hash",
+            "display_options",
+            "privatebookmarkorder",
+            "plannings"
+          ]
+        },
+        "glpi_useremails": {
+          "allow": [
+            "id",
+            "users_id",
+            "is_default",
+            "is_dynamic"
+          ],
+          "mask": [
+            "email"
+          ],
+          "deny": []
+        },
+        "glpi_groups": {
+          "allow": [
+            "id",
+            "name",
+            "entities_id",
+            "groups_id",
+            "completename",
+            "level",
+            "is_requester",
+            "is_watcher",
+            "is_assign",
+            "is_task",
+            "is_notify",
+            "is_itemgroup",
+            "is_usergroup",
+            "is_manager",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [],
+          "deny": [
+            "comment",
+            "ldap_field",
+            "ldap_value",
+            "ldap_group_dn",
+            "ancestors_cache",
+            "sons_cache"
+          ]
+        },
+        "glpi_locations": {
+          "allow": [
+            "id",
+            "name",
+            "entities_id",
+            "locations_id",
+            "completename",
+            "level",
+            "town",
+            "state",
+            "country",
+            "building",
+            "room",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [
+            "address",
+            "postcode",
+            "latitude",
+            "longitude",
+            "altitude"
+          ],
+          "deny": [
+            "comment",
+            "ancestors_cache",
+            "sons_cache"
+          ]
+        },
+        "glpi_manufacturers": {
+          "allow": [
+            "id",
+            "name",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [],
+          "deny": [
+            "comment"
+          ]
+        },
+        "glpi_computermodels": {
+          "allow": [
+            "id",
+            "name",
+            "product_number",
+            "weight",
+            "required_units",
+            "depth",
+            "power_connections",
+            "power_consumption",
+            "is_half_rack",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [],
+          "deny": [
+            "comment",
+            "picture_front",
+            "picture_rear",
+            "pictures"
+          ]
+        },
+        "glpi_monitormodels": {
+          "allow": [
+            "id",
+            "name",
+            "product_number",
+            "weight",
+            "required_units",
+            "depth",
+            "power_connections",
+            "power_consumption",
+            "is_half_rack",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [],
+          "deny": [
+            "comment",
+            "picture_front",
+            "picture_rear",
+            "pictures"
+          ]
+        },
+        "glpi_printermodels": {
+          "allow": [
+            "id",
+            "name",
+            "product_number",
+            "date_creation",
+            "date_mod"
+          ],
+          "mask": [],
+          "deny": [
+            "comment",
+            "picture_front",
+            "picture_rear",
+            "pictures"
+          ]
+        },
+        "glpi_tickets": {
+          "allow": [
+            "id",
+            "name",
+            "entities_id",
+            "date",
+            "closedate",
+            "solvedate",
+            "takeintoaccountdate",
+            "date_mod",
+            "users_id_lastupdater",
+            "users_id_recipient",
+            "status",
+            "requesttypes_id",
+            "urgency",
+            "impact",
+            "priority",
+            "itilcategories_id",
+            "type",
+            "global_validation",
+            "time_to_resolve",
+            "time_to_own",
+            "waiting_duration",
+            "close_delay_stat",
+            "solve_delay_stat",
+            "takeintoaccount_delay_stat",
+            "actiontime",
+            "is_deleted",
+            "locations_id",
+            "validation_percent",
+            "date_creation"
+          ],
+          "mask": [],
+          "deny": [
+            "content"
+          ]
+        },
+        "glpi_tickets_users": {
+          "allow": [
+            "id",
+            "tickets_id",
+            "users_id",
+            "type",
+            "use_notification"
+          ],
+          "mask": [
+            "alternative_email"
+          ],
+          "deny": []
+        },
+        "glpi_items_tickets": {
+          "allow": [
+            "id",
+            "itemtype",
+            "items_id",
+            "tickets_id"
+          ],
+          "mask": [],
+          "deny": []
+        },
+        "glpi_documents": {
+          "allow": [
+            "id",
+            "entities_id",
+            "name",
+            "filename",
+            "documentcategories_id",
+            "mime",
+            "date_mod",
+            "is_deleted",
+            "users_id",
+            "tickets_id",
+            "is_blacklisted",
+            "tag",
+            "date_creation"
+          ],
+          "mask": [
+            "filepath",
+            "link",
+            "sha1sum"
+          ],
+          "deny": [
+            "comment"
+          ]
+        },
+        "glpi_documents_items": {
+          "allow": [
+            "id",
+            "documents_id",
+            "items_id",
+            "itemtype",
+            "entities_id",
+            "date_mod",
+            "users_id",
+            "timeline_position",
+            "date_creation",
+            "date"
+          ],
+          "mask": [],
+          "deny": []
+        },
+        "glpi_logs": {
+          "allow": [
+            "id",
+            "itemtype",
+            "items_id",
+            "itemtype_link",
+            "linked_action",
+            "date_mod",
+            "id_search_option"
+          ],
+          "mask": [
+            "user_name",
+            "old_value",
+            "new_value"
+          ],
           "deny": []
         }
       }

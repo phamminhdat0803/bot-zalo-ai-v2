@@ -84,8 +84,13 @@ async function run() {
     fs.writeFileSync(groupsPath, "{ not-json");
     clearPromptCache();
     reloadModules();
-    const reg = await require("../src/modules/ai/prompt-loader").loadPromptRegistry();
-    console.log("CASE invalid groups.json:", Object.keys(reg).length === 0);
+    let failedFast = false;
+    try {
+      await require("../src/modules/ai/prompt-loader").loadPromptRegistry();
+    } catch (e) {
+      failedFast = /groups\.json invalid JSON/.test(e.message);
+    }
+    console.log("CASE invalid groups.json:", failedFast);
   } finally {
     fs.writeFileSync(groupsPath, backup);
     clearPromptCache();
@@ -108,6 +113,23 @@ async function run() {
     fs.writeFileSync(groupsPath, backup2);
     clearPromptCache();
   }
+
+  clearPromptCache();
+  reloadModules();
+  const actionPlanner = await require("../src/modules/ai/prompt-loader").loadPromptFile("capabilities/action-planner.md");
+  console.log(
+    "PROMPT no CRM hardcode:",
+    !/\bcustomers\b|\breceipts\b|\bproducts\b/i.test(actionPlanner)
+  );
+  const glpiPrompt = await require("../src/modules/ai/prompt-manager").buildPromptContext({
+    normalizedMessage: { ...baseMsg, threadId: "6345678949379162493", text: "query users" },
+    previousMessages: [],
+  });
+  console.log(
+    "PROMPT GLPI aliases:",
+    glpiPrompt.systemPrompt.includes("users/user -> glpi_users") &&
+      glpiPrompt.systemPrompt.includes("tickets/ticket -> glpi_tickets")
+  );
 
   process.env.PROMPT_USE_FILES = "true";
   process.env.PROMPT_SPLIT_SYSTEM = "true";

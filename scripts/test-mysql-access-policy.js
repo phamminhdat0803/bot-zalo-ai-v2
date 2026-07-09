@@ -44,6 +44,24 @@ const baseCtx = (extra = {}) => ({
   ...extra,
 });
 
+const glpiCtx = (extra = {}) => ({
+  threadId: "g-glpi",
+  groupConfig: {
+    mysql: {
+      enabled: true,
+      allowedDatabases: ["glpi"],
+      allowedTables: ["glpi_users", "glpi_tickets", "glpi_computers"],
+      tableAliases: {
+        users: "glpi_users",
+        tickets: "glpi_tickets",
+        computers: "glpi_computers",
+      },
+      maxRows: 100,
+    },
+  },
+  ...extra,
+});
+
 // --- extractTables unit ---
 {
   const r = policy.extractTables("SELECT * FROM customers");
@@ -250,6 +268,59 @@ const baseCtx = (extra = {}) => ({
     },
   });
   assert(v.ok === true, "[36] fallback groups.json path");
+}
+
+// --- GLPI table aliases + rewrite ---
+{
+  const v = policy.enforceAccessPolicy("SELECT id,name FROM users", glpiCtx());
+  assert(v.ok === true && v.tables[0].table === "glpi_users", "[37] alias users -> glpi_users passes");
+  assert(v.sqlRewritten === true && /FROM glpi_users/i.test(v.rewrittenSql), "[37b] SQL rewritten to glpi_users");
+}
+{
+  const v = policy.enforceAccessPolicy("SELECT id,name FROM `Users`", glpiCtx());
+  assert(v.ok === true && v.tables[0].table === "glpi_users", "[38] alias is case/backtick insensitive");
+}
+{
+  const v = policy.enforceAccessPolicy("SELECT id,name FROM glpi_users", glpiCtx());
+  assert(v.ok === true && v.sqlRewritten === false, "[39] canonical glpi_users still passes without rewrite");
+}
+{
+  const v = policy.enforceAccessPolicy("SELECT * FROM customers", glpiCtx());
+  assert(v.ok === false && v.error === "mysql_table_not_allowed", "[40] customers fails under GLPI policy");
+}
+{
+  const v = policy.enforceAccessPolicy("SELECT * FROM users JOIN tickets ON tickets.users_id = users.id", glpiCtx());
+  assert(v.ok === true, "[41] users JOIN tickets aliases pass");
+  assert(/FROM glpi_users JOIN glpi_tickets/i.test(v.rewrittenSql), "[41b] JOIN aliases rewritten");
+}
+{
+  const v = policy.enforceAccessPolicy("DESCRIBE users", glpiCtx());
+  assert(v.ok === true && /^DESCRIBE glpi_users$/i.test(v.rewrittenSql), "[42] DESCRIBE alias rewritten");
+}
+{
+  const v = policy.enforceAccessPolicy("SHOW COLUMNS FROM users", glpiCtx());
+  assert(v.ok === true && /^SHOW COLUMNS FROM glpi_users$/i.test(v.rewrittenSql), "[43] SHOW COLUMNS alias rewritten");
+}
+{
+  const v = policy.enforceAccessPolicy("SELECT * FROM hacked", glpiCtx());
+  assert(v.ok === false && v.error === "mysql_table_not_allowed", "[44] missing alias cannot bypass allowlist");
+}
+{
+  const v = policy.enforceAccessPolicy("SELECT * FROM hacked", glpiCtx({
+    groupConfig: {
+      mysql: {
+        enabled: true,
+        allowedDatabases: ["glpi"],
+        allowedTables: ["glpi_users"],
+        tableAliases: { hacked: "glpi_users" },
+      },
+    },
+  }));
+  assert(v.ok === true && v.tables[0].table === "glpi_users", "[45] configured alias can map to allowed table");
+}
+{
+  const r = policy.rewriteSqlTableAliases("SELECT 'FROM users' AS txt FROM users", { users: "glpi_users" });
+  assert(r.sql === "SELECT 'FROM users' AS txt FROM glpi_users", "[46] rewrite skips string literal");
 }
 
 console.log(`\nResult: ${pass} pass, ${fail} fail`);

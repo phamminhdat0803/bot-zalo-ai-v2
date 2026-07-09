@@ -174,6 +174,37 @@ function baseCtx(extra = {}) {
   };
 }
 
+function glpiCtx(extra = {}) {
+  return {
+    threadId: "g-glpi",
+    senderId: "u-test",
+    isGroup: true,
+    groupConfig: {
+      mysql: {
+        enabled: true,
+        allowedDatabases: ["glpi"],
+        allowedTables: ["glpi_users"],
+        tableAliases: { users: "glpi_users" },
+        maxRows: 50,
+        columns: {
+          glpi_users: {
+            allow: ["id", "name"],
+            mask: ["phone", "email"],
+            deny: ["password", "token", "secret"],
+          },
+        },
+      },
+    },
+    groupsRegistry: {
+      "g-glpi": {
+        allowedTools: ["mysql_readonly_query"],
+      },
+    },
+    usersRegistry: {},
+    ...extra,
+  };
+}
+
 async function run() {
   assert(!!t, "[1] tool registered");
 
@@ -456,6 +487,23 @@ async function run() {
     "[18] no column policy → mysql_column_policy_missing"
   );
   assert(!state.calls.some(c => c.kind === "withClient"), "[18b] column-policy missing short-circuits before query");
+
+  state.calls = [];
+  rl3._reset();
+  r = await t.execute({ sql: "SELECT id, name FROM users LIMIT 5", reason: "x" }, glpiCtx());
+  assert(r.ok === true, "[19] GLPI alias users query ok");
+  assert(
+    state.calls.some(c => c.kind === "query" && /FROM glpi_users\s+LIMIT 5/i.test(c.sql)),
+    "[19b] executed SQL uses glpi_users"
+  );
+  assert(r.rows[0].phone === "***" && r.rows[0].email === "***", "[19c] GLPI mask applies via glpi_users policy");
+  assert(!("password" in r.rows[0]) && !("token" in r.rows[0]), "[19d] GLPI deny applies via glpi_users policy");
+
+  state.calls = [];
+  rl3._reset();
+  r = await t.execute({ sql: "SELECT id, name FROM users LIMIT 5", reason: "x" }, baseCtx());
+  assert(r.ok === false && r.error === "mysql_table_not_allowed", "[20] CRM policy cannot query users without GLPI alias");
+  assert(!state.calls.some(c => c.kind === "withClient"), "[20b] CRM users blocked before mysql client");
 
   console.log(`\nResult: ${pass} pass, ${fail} fail`);
   if (fail > 0) process.exit(1);

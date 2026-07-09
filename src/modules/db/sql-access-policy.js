@@ -31,6 +31,10 @@ function normalizeIdentifier(name) {
   return name.replace(/`/g, "").trim().toLowerCase();
 }
 
+function quoteIdentifier(name) {
+  return String(name).replace(/`/g, "");
+}
+
 function normalizeList(list) {
   if (!Array.isArray(list)) return [];
   return list.map(normalizeIdentifier).filter(Boolean);
@@ -93,8 +97,123 @@ function sanitizePolicy(raw) {
     allowedDatabases,
     allowedTables,
     allowAllTables,
+    tableAliases: sanitizeTableAliases(raw.tableAliases),
     maxRows,
   };
+}
+
+function sanitizeTableAliases(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  const out = {};
+  for (const [alias, canonical] of Object.entries(input)) {
+    const key = normalizeIdentifier(alias);
+    const value = normalizeIdentifier(canonical);
+    if (!key || !value) continue;
+    if (!/^[a-z_][a-z0-9_]*$/.test(key)) continue;
+    if (!/^[a-z_][a-z0-9_]*$/.test(value)) continue;
+    out[key] = value;
+  }
+  return out;
+}
+
+function resolveTableAlias(tableName, aliases = {}) {
+  const normalized = normalizeIdentifier(tableName);
+  if (!normalized) return "";
+  return aliases[normalized] || normalized;
+}
+
+function applyTableAliases(tables, aliases = {}) {
+  const safeTables = Array.isArray(tables) ? tables : [];
+  const mapped = [];
+  const changes = [];
+  for (const t of safeTables) {
+    const originalTable = normalizeIdentifier(t?.table);
+    const canonicalTable = resolveTableAlias(originalTable, aliases);
+    if (!originalTable || !canonicalTable) continue;
+    mapped.push({
+      ...t,
+      table: canonicalTable,
+      originalTable,
+      canonicalTable,
+      aliasApplied: originalTable !== canonicalTable,
+    });
+    if (originalTable !== canonicalTable) {
+      changes.push({ originalTable, canonicalTable });
+    }
+  }
+  return { tables: mapped, changes };
+}
+
+function splitSqlLiterals(sql) {
+  const parts = [];
+  let current = "";
+  let inQuote = null;
+  for (let i = 0; i < sql.length; i++) {
+    const ch = sql[i];
+    current += ch;
+    if (inQuote) {
+      if (ch === "\\" && i + 1 < sql.length) {
+        current += sql[++i];
+        continue;
+      }
+      if (ch === inQuote) {
+        parts.push({ text: current, literal: true });
+        current = "";
+        inQuote = null;
+      }
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      if (current.length > 1) parts.push({ text: current.slice(0, -1), literal: false });
+      current = ch;
+      inQuote = ch;
+    }
+  }
+  if (current) parts.push({ text: current, literal: Boolean(inQuote) });
+  return parts;
+}
+
+function rewriteSegmentTables(segment, aliases = {}) {
+  const aliasKeys = Object.keys(aliases || {});
+  if (aliasKeys.length === 0) return { sql: segment, rewrites: [] };
+  const rewrites = [];
+  const tableRef = "`?([a-z_][a-z0-9_]*)`?(?:\\.`?([a-z_][a-z0-9_]*)`?)?";
+  const keywordRe = new RegExp(`\\b(FROM|JOIN|DESCRIBE|DESC)\\s+(${tableRef})`, "gi");
+  let sql = segment.replace(keywordRe, (full, keyword, _ref, first, second) => {
+    const db = second ? first : null;
+    const tbl = second || first;
+    const canonical = resolveTableAlias(tbl, aliases);
+    if (canonical === normalizeIdentifier(tbl)) return full;
+    rewrites.push({ originalTable: normalizeIdentifier(tbl), canonicalTable: canonical });
+    const replacement = db ? `${quoteIdentifier(db)}.${quoteIdentifier(canonical)}` : quoteIdentifier(canonical);
+    return `${keyword} ${replacement}`;
+  });
+
+  const showRe = new RegExp(`\\b(SHOW\\s+(?:FULL\\s+)?(?:COLUMNS|INDEX|INDEXES|KEYS)\\s+(?:FROM|IN))\\s+(${tableRef})`, "gi");
+  sql = sql.replace(showRe, (full, prefix, _ref, first, second) => {
+    const db = second ? first : null;
+    const tbl = second || first;
+    const canonical = resolveTableAlias(tbl, aliases);
+    if (canonical === normalizeIdentifier(tbl)) return full;
+    rewrites.push({ originalTable: normalizeIdentifier(tbl), canonicalTable: canonical });
+    const replacement = db ? `${quoteIdentifier(db)}.${quoteIdentifier(canonical)}` : quoteIdentifier(canonical);
+    return `${prefix} ${replacement}`;
+  });
+
+  return { sql, rewrites };
+}
+
+function rewriteSqlTableAliases(sql, aliases = {}) {
+  if (typeof sql !== "string" || !sql.trim()) return { sql, rewrites: [], rewritten: false };
+  const parts = splitSqlLiterals(sql);
+  const rewrites = [];
+  const rewrittenSql = parts.map((part) => {
+    if (part.literal) return part.text;
+    const r = rewriteSegmentTables(part.text, aliases);
+    rewrites.push(...r.rewrites);
+    return r.sql;
+  }).join("");
+  return { sql: rewrittenSql, rewrites, rewritten: rewrittenSql !== sql };
 }
 
 /**
@@ -317,15 +436,23 @@ function enforceAccessPolicy(sql, ctx = {}) {
     return { ok: false, error: extracted.error, source };
   }
 
-  const verdict = checkPolicy(policy, extracted.tables);
+  const aliased = applyTableAliases(extracted.tables, policy.tableAliases);
+  const verdict = checkPolicy(policy, aliased.tables);
   if (!verdict.ok) {
     return { ok: false, error: verdict.error, details: verdict.details, source };
   }
 
+  const rewritten = rewriteSqlTableAliases(sql, policy.tableAliases);
+
   return {
     ok: true,
     policy,
-    tables: extracted.tables,
+    tables: aliased.tables,
+    originalTables: extracted.tables,
+    aliasChanges: aliased.changes,
+    rewrittenSql: rewritten.sql,
+    sqlRewritten: rewritten.rewritten,
+    sqlRewriteChanges: rewritten.rewrites,
     statement: extracted.statement,
     source,
   };
@@ -334,6 +461,10 @@ function enforceAccessPolicy(sql, ctx = {}) {
 module.exports = {
   resolvePolicy,
   sanitizePolicy,
+  sanitizeTableAliases,
+  resolveTableAlias,
+  applyTableAliases,
+  rewriteSqlTableAliases,
   extractTables,
   checkPolicy,
   enforceAccessPolicy,

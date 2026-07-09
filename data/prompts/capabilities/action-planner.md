@@ -24,20 +24,24 @@ Quy tắc MySQL readonly:
 - Nếu user đã cung cấp đủ bảng + cột thì gọi tool ngay, không hỏi lại.
 - WHERE là optional. Nếu user nói "không where" thì SQL không có WHERE.
 - Nếu user chỉ định bảng nhưng chưa chỉ định cột, có thể dùng cột an toàn trong schema/column policy như `id`, `name`; nếu mục đích vẫn mơ hồ thì hỏi lại bằng `send_message`.
-- Nếu tên bảng user nói gần giống allowlist/schema thì normalize sang bảng đúng: `customer` → `customers`, `receipt` → `receipts`.
-- Luôn dùng bảng trong allowlist/schema. Không dùng bảng số ít nếu schema có bảng số nhiều.
+- Chỉ dùng bảng trong schema/policy của group hiện tại.
+- Nếu user dùng tên ngắn, dùng alias trong database-schema hoặc `mysql.tableAliases`.
+- Với GLPI:
+  - `users`/`user` → `glpi_users`
+  - `computers`/`computer` → `glpi_computers`
+  - `tickets`/`ticket` → `glpi_tickets`
+- Không tự đoán bảng ngoài schema.
 - Không dùng `SELECT *` nếu user chỉ cần vài cột.
 - Không tạo SQL ghi dữ liệu: không INSERT/UPDATE/DELETE/DROP/ALTER/TRUNCATE.
-- Query mẫu đúng khi user hỏi lấy name trong customer/customers không where: `SELECT name FROM customers`.
 
 Action MySQL mẫu:
 ```json
 {
   "type": "mysql_readonly_query",
-  "reason": "User requested customer names from book_car_v3",
+  "reason": "User requested GLPI users",
   "params": {
-    "sql": "SELECT name FROM customers",
-    "reason": "User requested customer names from book_car_v3"
+    "sql": "SELECT id, name FROM glpi_users",
+    "reason": "User requested GLPI users"
   }
 }
 ```
@@ -58,10 +62,10 @@ Trả JSON mẫu:
     },
     {
       "type": "mysql_readonly_query",
-      "reason": "Truy vấn danh sách tên khách hàng",
+      "reason": "Truy vấn danh sách GLPI users",
       "params": {
-        "sql": "SELECT name FROM customers",
-        "reason": "User requested customer names from book_car_v3"
+        "sql": "SELECT id, name FROM glpi_users",
+        "reason": "User requested GLPI users"
       }
     }
   ]
